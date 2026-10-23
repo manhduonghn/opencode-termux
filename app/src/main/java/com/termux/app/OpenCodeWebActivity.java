@@ -812,7 +812,12 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
         if (requestCode == REQUEST_NOTIFICATION_PERMISSION) {
             if (mWebPermissionRequest != null) {
                 if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                    mWebPermissionRequest.grant(mWebPermissionRequest.getResources());
+                    String[] res = mWebPermissionRequest.getResources();
+                    if (res != null) {
+                        mWebPermissionRequest.grant(res);
+                    } else {
+                        mWebPermissionRequest.deny();
+                    }
                 } else {
                     mWebPermissionRequest.deny();
                 }
