@@ -262,5 +262,6 @@
     <string name="opencode_web_retry">Retry</string>
     <string name="opencode_web_starting">Starting the OpenCode web UI…</string>
     <string name="opencode_web_failed">Could not open the OpenCode web UI.</string>
+    <string name="opencode_web_http_error">The OpenCode server returned HTTP %1$d.</string>
 
 </resources>

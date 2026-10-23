@@ -13,6 +13,7 @@ import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceError;
 import android.webkit.WebResourceRequest;
+import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
@@ -27,8 +28,6 @@ import com.termux.R;
 import com.termux.shared.logger.Logger;
 
 import java.util.Collections;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 /**
  * The main screen of the app: the OpenCode web UI inside an in-app WebView.
@@ -47,10 +46,6 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
     private static final long SERVICE_START_TIMEOUT_MS = 60_000L;
     private static final long CLI_TIMEOUT_MS = 30_000L;
 
-    private static final Pattern URL_PATTERN = Pattern.compile("https?://\\S+");
-    private static final Pattern PAIR_CODE_PATTERN = Pattern.compile("\"code\"\\s*:\\s*\"([^\"]+)\"");
-    private static final Pattern PAIR_LINK_PATTERN = Pattern.compile("https?://\\S+/auth/connect/[^\\s]+");
-
     private WebView mWebView;
     private View mStatusView;
     private ProgressBar mProgressBar;
@@ -66,6 +61,13 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
     private boolean mAuthCompleted = false;
     private boolean mPageError = false;
 
+    /**
+     * Incremented for every load attempt. A result from a start thread that finished after the
+     * user reloaded, exited and reopened the app, is discarded so that it cannot overwrite the
+     * state of the newer load.
+     */
+    private int mLoadGeneration = 0;
+
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -78,8 +80,8 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
         mRetryButton = findViewById(R.id.opencode_web_retry);
 
         findViewById(R.id.opencode_web_terminal_button).setOnClickListener(v -> openTerminal());
-        findViewById(R.id.opencode_web_reload_button).setOnClickListener(v -> mWebView.reload());
-        mRetryButton.setOnClickListener(v -> retry());
+        findViewById(R.id.opencode_web_reload_button).setOnClickListener(v -> reloadWebUi());
+        mRetryButton.setOnClickListener(v -> reloadWebUi());
 
         configureWebView();
         ensureRuntime();
@@ -107,6 +109,7 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
         if (OpenCodeBootstrap.isTermuxBootstrapReady()) {
             OpenCodeBootstrap.checkRuntime(this);
         }
+        reloadIfStopped();
     }
 
     @Override
@@ -131,6 +134,12 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
         super.onNewIntent(intent);
         setIntent(intent);
         handleForceUpdateIntent();
+
+        // The app is a singleTask activity: tapping the launcher again does not recreate it but
+        // delivers this intent. If the service was stopped in the meantime (notification exit or
+        // the last terminal session was closed), the old page is dead even though the activity
+        // is still alive, so pair again.
+        reloadIfStopped();
     }
 
     @Override
@@ -236,8 +245,13 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
         OpenCodeBootstrap.requestUpdate(this);
     }
 
-    private void retry() {
-        mPageError = false;
+    /**
+     * Discard the current page and pair with the service again. This is used by the retry and
+     * reload buttons: a pair link is single use, so simply reloading the WebView would request the
+     * same expired link again and show a 401 page.
+     */
+    private void reloadWebUi() {
+        resetWebUiState();
         if (!OpenCodeBootstrap.isRuntimeComplete()) {
             ensureRuntime();
             return;
@@ -312,7 +326,7 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
                 super.onPageFinished(view, url);
                 if (isFinishing() || isDestroyed()) return;
 
-                if (!mAuthCompleted && url != null && !url.contains("/auth/connect/")) {
+                if (!mPageError && !mAuthCompleted && url != null && !url.contains("/auth/connect/")) {
                     mAuthCompleted = true;
                     // Drop the one time pair redirect from the history, so the system back
                     // button leaves the web UI instead of showing the expired pair page.
@@ -334,6 +348,21 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
                 if (request.isForMainFrame()) {
                     CharSequence description = error == null ? null : error.getDescription();
                     showError(description == null ? null : description.toString());
+                }
+            }
+
+            @Override
+            public void onReceivedHttpError(WebView view, WebResourceRequest request,
+                                            WebResourceResponse errorResponse) {
+                super.onReceivedHttpError(view, request, errorResponse);
+                if (request == null || !request.isForMainFrame()) return;
+
+                int statusCode = errorResponse == null ? 0 : errorResponse.getStatusCode();
+                // A pair code is single use. Reusing it returns 401, and a failure of the service
+                // itself is reported with a 5xx status. In both cases the page must not be
+                // treated as successfully loaded.
+                if (statusCode == 401 || statusCode >= 500) {
+                    showError(getString(R.string.opencode_web_http_error, statusCode));
                 }
             }
         });
@@ -390,21 +419,59 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
     }
 
     private void maybeLoadWebUi() {
+        // The service was stopped while this activity existed. The WebView still contains the old
+        // authenticated page, but the one time pair link behind it is gone, so start over.
+        if (OpenCodeService.consumeStoppedByUser()) {
+            resetWebUiState();
+            loadWebUi();
+            return;
+        }
+
         if (mWebUiStarted) return;
         loadWebUi();
     }
 
+    /**
+     * Pair again when the service was stopped while this activity was alive. A pair link is single
+     * use, so the page that is still displayed belongs to a service that no longer runs. Called
+     * from {@link #onNewIntent(Intent)} and {@link #onResume()} so that both a launcher intent and
+     * a return from the background replace the dead page.
+     */
+    private void reloadIfStopped() {
+        if (!OpenCodeService.consumeStoppedByUser()) return;
+
+        resetWebUiState();
+        if (OpenCodeBootstrap.isRuntimeComplete()) {
+            loadWebUi();
+        } else {
+            ensureRuntime();
+        }
+    }
+
+    /** Forget everything about the current page and cancel a load that may still be running. */
+    private void resetWebUiState() {
+        mLoadGeneration++;
+        mWebUiStarted = false;
+        mAuthCompleted = false;
+        mPageError = false;
+        if (mWebView != null) mWebView.stopLoading();
+    }
+
     /** Start the service, pair this WebView and load the web UI. */
     private void loadWebUi() {
+        final int generation = ++mLoadGeneration;
+
         mWebUiStarted = true;
         mPageError = false;
+        if (mWebView != null) mWebView.stopLoading();
         showStatus(getString(R.string.opencode_web_starting), false);
 
         new Thread(() -> {
             String error = null;
             String pairUrl = null;
             try {
-                pairUrl = preparePairUrl();
+                pairUrl = OpenCodeService.startAndPair(
+                    getApplicationContext(), SERVICE_START_TIMEOUT_MS, CLI_TIMEOUT_MS);
             } catch (Exception e) {
                 Logger.logStackTraceWithMessage(LOG_TAG, "Failed to start the OpenCode web UI", e);
                 error = e.getMessage();
@@ -414,6 +481,11 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
             final String message = error;
             runOnUiThread(() -> {
                 if (isFinishing() || isDestroyed()) return;
+                // A newer load was started (reload button, stop detected, ...) while this one was
+                // waiting for the service. Do not let the stale result win.
+                if (generation != mLoadGeneration) return;
+                if (mWebView == null) return;
+
                 if (url != null) {
                     // The server only answers the one time pair link with the session cookie
                     // redirect when the request looks like a browser navigation. WebView sends
@@ -421,51 +493,11 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
                     mWebView.loadUrl(url, Collections.singletonMap(
                         "Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"));
                 } else {
+                    mWebUiStarted = false;
                     showError(message);
                 }
             });
         }, "opencode-web-start").start();
-    }
-
-    /** @return the one time URL that gives the WebView its authentication cookie. */
-    private String preparePairUrl() throws Exception {
-        String startOutput = OpenCodeCli.run(this, SERVICE_START_TIMEOUT_MS, "service", "start");
-        String baseUrl = firstMatch(URL_PATTERN, startOutput, 0);
-        if (baseUrl == null) {
-            throw new Exception("The OpenCode service did not report its URL: " + startOutput.trim());
-        }
-        baseUrl = trimTrailingSlash(baseUrl);
-
-        try {
-            String pairOutput = OpenCodeCli.run(this, CLI_TIMEOUT_MS, "api", "POST", "/api/pair");
-            String code = firstMatch(PAIR_CODE_PATTERN, pairOutput, 1);
-            if (code != null) {
-                return baseUrl + "/auth/connect/" + code;
-            }
-        } catch (Exception e) {
-            Logger.logStackTraceWithMessage(LOG_TAG, "Could not create a pair code through the API", e);
-        }
-
-        // Older versions do not expose /api/pair, but the pair command prints the complete link.
-        String pairOutput = OpenCodeCli.run(this, CLI_TIMEOUT_MS, "pair");
-        String link = firstMatch(PAIR_LINK_PATTERN, pairOutput, 0);
-        if (link == null) {
-            throw new Exception("OpenCode did not return a pair link: " + pairOutput.trim());
-        }
-        return link;
-    }
-
-    @Nullable
-    private static String firstMatch(Pattern pattern, @Nullable String text, int group) {
-        if (text == null) return null;
-        Matcher matcher = pattern.matcher(text);
-        return matcher.find() ? matcher.group(group) : null;
-    }
-
-    private static String trimTrailingSlash(String url) {
-        int end = url.length();
-        while (end > 0 && url.charAt(end - 1) == '/') end--;
-        return url.substring(0, end);
     }
 
     private void showStatus(String text, boolean showRetry) {
@@ -483,6 +515,7 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
     private void showError(@Nullable String details) {
         if (isFinishing() || isDestroyed()) return;
         mPageError = true;
+        mWebUiStarted = false;
 
         String message = getString(R.string.opencode_web_failed);
         if (details != null && !details.trim().isEmpty()) {

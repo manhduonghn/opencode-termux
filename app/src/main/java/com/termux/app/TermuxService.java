@@ -109,6 +109,16 @@ public final class TermuxService extends Service implements AppShell.AppShellCli
     /** If the user has executed the {@link TERMUX_SERVICE#ACTION_STOP_SERVICE} intent. */
     boolean mWantsToStop = false;
 
+    /** True while a stop has been requested and its final {@link #stopSelf()} is still pending. */
+    private volatile boolean mStopRequested = false;
+
+    /**
+     * True once a daemon stop that also wipes {@code $PREFIX/tmp} has been requested for this
+     * service instance. {@link #onDestroy()} then leaves the cleanup to that request instead of
+     * starting a second stop that could kill a service that was started in the meantime.
+     */
+    private volatile boolean mDaemonStopScheduled = false;
+
     private static final String LOG_TAG = "TermuxService";
 
     @Override
@@ -173,7 +183,19 @@ public final class TermuxService extends Service implements AppShell.AppShellCli
     public void onDestroy() {
         Logger.logVerbose(LOG_TAG, "onDestroy");
 
-        TermuxShellUtils.clearTermuxTMPDIR(true);
+        if (mDaemonStopScheduled) {
+            // requestStopService() already stops the daemon and wipes $PREFIX/tmp under the
+            // service lock. A second stop here could kill a service that the user started again
+            // after reopening the app while the first stop was still running.
+        } else if (OpenCodeBootstrap.isRuntimeComplete()) {
+            // The daemon inherits $PREFIX/tmp. Stop it before wiping that directory, otherwise a
+            // still running daemon would keep pointing at a directory that no longer exists. The
+            // cleanup runs under the same lock as a later service start, so a fast reopen cannot
+            // create a daemon and then have its TMPDIR deleted underneath it.
+            OpenCodeService.stopAsync(this, true, null);
+        } else {
+            TermuxShellUtils.clearTermuxTMPDIR(true);
+        }
 
         actionReleaseWakeLock(false);
         if (!mWantsToStop)
@@ -217,9 +239,35 @@ public final class TermuxService extends Service implements AppShell.AppShellCli
 
     /** Request to stop service. */
     private void requestStopService() {
+        if (mStopRequested) return;
+        mStopRequested = true;
         Logger.logDebug(LOG_TAG, "Requesting to stop service");
-        runStopForeground();
-        stopSelf();
+
+        if (!OpenCodeBootstrap.isRuntimeComplete()) {
+            // There is no managed daemon that could outlive the service.
+            runStopForeground();
+            stopSelf();
+            return;
+        }
+
+        // The OpenCode daemon runs in its own process and would outlive the Termux service. Stop
+        // it before the service goes away, otherwise the next start reuses a stale registration
+        // and a dead one time pair link. $PREFIX/tmp is wiped afterwards, which must not happen
+        // while the daemon is still running. onDestroy() relies on this request and does not
+        // schedule a second stop.
+        mDaemonStopScheduled = true;
+        OpenCodeService.stopAsync(this, true, () -> {
+            // A new terminal session may have been created while the daemon was stopping (the
+            // user reopened the app immediately after tapping exit). In that case keep the
+            // service alive; the idle notification handler stops it once the last session ends.
+            if (mShellManager.mTermuxSessions.isEmpty() && mShellManager.mTermuxTasks.isEmpty()) {
+                runStopForeground();
+                stopSelf();
+            } else {
+                mStopRequested = false;
+                mDaemonStopScheduled = false;
+            }
+        });
     }
 
     /** Process action to stop service. */
