@@ -651,7 +651,7 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
                     .setPositiveButton(android.R.string.ok, (d, w) -> {
                         String repo = input.getText().toString().trim();
                         if (!repo.isEmpty()) {
-                            runGitHub(new String[]{"repo", "clone", repo});
+                            runShell("gh repo clone " + repo.replace("'", "'\\''") + " 2>&1");
                         }
                     })
                     .setNegativeButton(android.R.string.cancel, null)
