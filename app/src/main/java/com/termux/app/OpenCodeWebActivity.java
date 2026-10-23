@@ -199,7 +199,7 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
         }
     }
 
-    /** The terminal/OpenTUI is a separate Termux screen, opened from the web toolbar. */
+    /** The terminal/OpenTUI is a separate Termux screen. */
     private void openTerminal() {
         startActivity(new Intent(this, TermuxActivity.class));
     }
@@ -663,7 +663,7 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
     private void ensureGitHubReady(android.widget.TextView status, android.widget.TextView loginLink, android.widget.Button loginBtn, android.widget.Button logoutBtn, android.widget.TextView user, android.widget.Button cloneBtn, android.widget.ListView reposList) {
         status.setText(R.string.opencode_github_installing);
         new Thread(() -> {
-            runShell("pkg install -y git gh");
+            runShell("pkg install -y git gh 2>&1");
             runOnUiThread(() -> startGitHubLogin(status, loginLink, loginBtn, logoutBtn, user, cloneBtn, reposList));
         }, "opencode-gh-install").start();
     }
@@ -675,7 +675,7 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
                 runOnUiThread(() -> refreshGitHubStatus(status, loginLink, loginBtn, logoutBtn, user, cloneBtn, reposList));
                 return;
             }
-            String loginOut = runShell("echo y | gh auth login -h github.com -p https --web -s repo,read:org 2>&1");
+            String loginOut = runShell("printf 'y\n' | gh auth login -h github.com -p https --web -s repo,read:org 2>&1");
             String link = extractGhLink(loginOut);
             runOnUiThread(() -> {
                 if (link != null && !link.isEmpty()) {
@@ -769,6 +769,8 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
             StringBuilder sb = new StringBuilder();
             String line;
             while ((line = r.readLine()) != null) sb.append(line).append('\n');
+            java.io.BufferedReader e = new java.io.BufferedReader(new java.io.InputStreamReader(p.getErrorStream()));
+            while ((line = e.readLine()) != null) sb.append(line).append('\n');
             p.waitFor();
             return sb.toString();
         } catch (Exception ex) {
@@ -780,17 +782,14 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
         String prefix = com.termux.shared.termux.TermuxConstants.TERMUX_PREFIX_DIR_PATH;
         String gh = prefix + "/bin/gh";
         java.io.File f = new java.io.File(gh);
-        if (!f.exists()) {
-            String[] c = new String[4 + (args == null ? 0 : args.length)];
-            c[0] = "sh";
-            c[1] = "-c";
-            StringBuilder s = new StringBuilder("gh");
-            if (args != null) for (String a : args) s.append(" ").append(quote(a));
-            c[2] = s.toString();
-            c[3] = null;
+        if (f.exists()) {
+            String[] c = new String[1 + (args == null ? 0 : args.length)];
+            c[0] = gh;
+            if (args != null) System.arraycopy(args, 0, c, 1, args.length);
+            return c;
         }
         String[] c = new String[1 + (args == null ? 0 : args.length)];
-        c[0] = f.exists() ? gh : "gh";
+        c[0] = "gh";
         if (args != null) System.arraycopy(args, 0, c, 1, args.length);
         return c;
     }
