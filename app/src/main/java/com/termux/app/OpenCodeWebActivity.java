@@ -21,6 +21,7 @@ import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.Button;
+import android.widget.ListView;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 
@@ -621,7 +622,7 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
         android.widget.Button logoutBtn = findViewById(R.id.opencode_github_logout_button);
         android.widget.TextView user = findViewById(R.id.opencode_github_user);
         android.widget.Button cloneBtn = findViewById(R.id.opencode_github_clone_button);
-        android.widget.ListView reposList = findViewById(R.id.opencode_github_repos_list);
+        ListView reposList = findViewById(R.id.opencode_github_repos_list);
 
         if (githubCheck != null && githubPanel != null) {
             githubCheck.setOnCheckedChangeListener((buttonView, isChecked) -> {
@@ -660,7 +661,7 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
         }
     }
 
-    private void ensureGitHubReady(android.widget.TextView status, android.widget.TextView loginLink, android.widget.Button loginBtn, android.widget.Button logoutBtn, android.widget.TextView user, android.widget.Button cloneBtn, android.widget.ListView reposList) {
+    private void ensureGitHubReady(android.widget.TextView status, android.widget.TextView loginLink, android.widget.Button loginBtn, android.widget.Button logoutBtn, android.widget.TextView user, android.widget.Button cloneBtn, ListView reposList) {
         status.setText(R.string.opencode_github_installing);
         new Thread(() -> {
             runShell("pkg install -y git gh 2>&1");
@@ -668,7 +669,7 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
         }, "opencode-gh-install").start();
     }
 
-    private void startGitHubLogin(android.widget.TextView status, android.widget.TextView loginLink, android.widget.Button loginBtn, android.widget.Button logoutBtn, android.widget.TextView user, android.widget.Button cloneBtn, android.widget.ListView reposList) {
+    private void startGitHubLogin(android.widget.TextView status, android.widget.TextView loginLink, android.widget.Button loginBtn, android.widget.Button logoutBtn, android.widget.TextView user, android.widget.Button cloneBtn, ListView reposList) {
         new Thread(() -> {
             String out = runShell("gh auth status 2>&1 | head -5");
             if (out != null && out.contains("Logged in")) {
@@ -703,7 +704,7 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
         }, "opencode-gh-login").start();
     }
 
-    private void refreshGitHubStatus(android.widget.TextView status, android.widget.TextView loginLink, android.widget.Button loginBtn, android.widget.Button logoutBtn, android.widget.TextView user, android.widget.Button cloneBtn, android.widget.ListView reposList) {
+    private void refreshGitHubStatus(android.widget.TextView status, android.widget.TextView loginLink, android.widget.Button loginBtn, android.widget.Button logoutBtn, android.widget.TextView user, android.widget.Button cloneBtn, ListView reposList) {
         new Thread(() -> {
             String who = runShell("gh api user -q .login 2>&1");
             String repos = runShell("gh repo list --limit 20 --json nameWithOwner -q '.[].nameWithOwner' 2>&1");
