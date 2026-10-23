@@ -5,10 +5,13 @@ import android.content.ActivityNotFoundException;
 import android.content.ClipData;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.view.View;
 import android.webkit.CookieManager;
+import android.webkit.PermissionRequest;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceError;
@@ -21,6 +24,10 @@ import android.widget.Button;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
+
+import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 
@@ -43,6 +50,7 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
     private static final String LOG_TAG = "OpenCodeWebActivity";
 
     private static final int REQUEST_FILE_CHOOSER = 1001;
+    private static final int REQUEST_NOTIFICATION_PERMISSION = 1002;
     private static final long SERVICE_START_TIMEOUT_MS = 60_000L;
     private static final long CLI_TIMEOUT_MS = 30_000L;
 
@@ -54,6 +62,9 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
 
     @Nullable
     private ValueCallback<Uri[]> mFilePathCallback;
+
+    @Nullable
+    private PermissionRequest mWebPermissionRequest;
 
     private boolean mStarted = false;
     private boolean mWebUiStarted = false;
@@ -79,11 +90,27 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
         mStatusText = findViewById(R.id.opencode_web_status_text);
         mRetryButton = findViewById(R.id.opencode_web_retry);
 
-        findViewById(R.id.opencode_web_terminal_button).setOnClickListener(v -> openTerminal());
         findViewById(R.id.opencode_web_reload_button).setOnClickListener(v -> reloadWebUi());
         mRetryButton.setOnClickListener(v -> reloadWebUi());
 
+        View settingsButton = findViewById(R.id.opencode_web_settings_button);
+        View settingsPanel = findViewById(R.id.opencode_settings_panel);
+        View settingsClose = findViewById(R.id.opencode_settings_close);
+        if (settingsButton != null) {
+            settingsButton.setOnClickListener(v -> {
+                if (settingsPanel != null) settingsPanel.setVisibility(View.VISIBLE);
+            });
+        }
+        if (settingsClose != null) {
+            settingsClose.setOnClickListener(v -> {
+                if (settingsPanel != null) settingsPanel.setVisibility(View.GONE);
+            });
+        }
+
+        configureGitHubSettings();
+
         configureWebView();
+        requestNotificationPermissionIfNeeded();
         ensureRuntime();
     }
 
@@ -160,6 +187,11 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
 
     @Override
     public void onBackPressed() {
+        View settingsPanel = findViewById(R.id.opencode_settings_panel);
+        if (settingsPanel != null && settingsPanel.getVisibility() == View.VISIBLE) {
+            settingsPanel.setVisibility(View.GONE);
+            return;
+        }
         if (mWebView != null && mWebView.canGoBack()) {
             mWebView.goBack();
         } else {
@@ -295,6 +327,19 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
      * ========================================================================================== */
 
     @SuppressWarnings("deprecation")
+    private void requestNotificationPermissionIfNeeded() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+            return;
+        }
+        if (ContextCompat.checkSelfPermission(this, android.Manifest.permission.POST_NOTIFICATIONS)
+                == PackageManager.PERMISSION_GRANTED) {
+            return;
+        }
+        ActivityCompat.requestPermissions(this,
+                new String[]{android.Manifest.permission.POST_NOTIFICATIONS},
+                REQUEST_NOTIFICATION_PERMISSION);
+    }
+
     private void configureWebView() {
         WebSettings settings = mWebView.getSettings();
         settings.setJavaScriptEnabled(true);
@@ -386,6 +431,49 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
                     Logger.logStackTraceWithMessage(LOG_TAG, "No activity for the file chooser", e);
                     return false;
                 }
+            }
+
+            @Override
+            public void onPermissionRequest(PermissionRequest request) {
+                if (request == null) return;
+                String[] resources = request.getResources();
+                if (resources == null || resources.length == 0) {
+                    request.deny();
+                    return;
+                }
+                boolean needsNotification = false;
+                for (String res : resources) {
+                    if (PermissionRequest.RESOURCE_NOTIFICATION.equals(res)) {
+                        needsNotification = true;
+                        break;
+                    }
+                }
+                if (needsNotification) {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        if (ContextCompat.checkSelfPermission(OpenCodeWebActivity.this,
+                                android.Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
+                            request.grant(resources);
+                            return;
+                        }
+                        mWebPermissionRequest = request;
+                        ActivityCompat.requestPermissions(OpenCodeWebActivity.this,
+                                new String[]{android.Manifest.permission.POST_NOTIFICATIONS},
+                                REQUEST_NOTIFICATION_PERMISSION);
+                        return;
+                    } else {
+                        request.grant(resources);
+                        return;
+                    }
+                }
+                request.grant(resources);
+            }
+
+            @Override
+            public void onPermissionRequestCanceled(PermissionRequest request) {
+                if (request != null && request == mWebPermissionRequest) {
+                    mWebPermissionRequest = null;
+                }
+                super.onPermissionRequestCanceled(request);
             }
         });
     }
@@ -524,10 +612,213 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
         showStatus(message, true);
     }
 
+    private void configureGitHubSettings() {
+        android.widget.CheckBox githubCheck = findViewById(R.id.opencode_extension_github);
+        android.view.View githubPanel = findViewById(R.id.opencode_github_panel);
+        android.widget.TextView status = findViewById(R.id.opencode_github_status);
+        android.widget.TextView loginLink = findViewById(R.id.opencode_github_login_link);
+        android.widget.Button loginBtn = findViewById(R.id.opencode_github_login_button);
+        android.widget.Button logoutBtn = findViewById(R.id.opencode_github_logout_button);
+        android.widget.TextView user = findViewById(R.id.opencode_github_user);
+        android.widget.Button cloneBtn = findViewById(R.id.opencode_github_clone_button);
+        android.widget.ListView reposList = findViewById(R.id.opencode_github_repos_list);
+
+        if (githubCheck != null && githubPanel != null) {
+            githubCheck.setOnCheckedChangeListener((buttonView, isChecked) -> {
+                if (isChecked) {
+                    githubPanel.setVisibility(View.VISIBLE);
+                    ensureGitHubReady(status, loginLink, loginBtn, logoutBtn, user, cloneBtn, reposList);
+                } else {
+                    githubPanel.setVisibility(View.GONE);
+                }
+            });
+        }
+        if (loginBtn != null) {
+            loginBtn.setOnClickListener(v -> startGitHubLogin(status, loginLink, loginBtn, logoutBtn, user, cloneBtn, reposList));
+        }
+        if (logoutBtn != null) {
+            logoutBtn.setOnClickListener(v -> {
+                runGitHub(new String[]{"auth", "logout", "-h", "github.com", "-y"});
+                refreshGitHubStatus(status, loginLink, loginBtn, logoutBtn, user, cloneBtn, reposList);
+            });
+        }
+        if (cloneBtn != null) {
+            cloneBtn.setOnClickListener(v -> {
+                android.widget.EditText input = new android.widget.EditText(this);
+                new android.app.AlertDialog.Builder(this)
+                    .setTitle(R.string.opencode_github_clone)
+                    .setView(input)
+                    .setPositiveButton(android.R.string.ok, (d, w) -> {
+                        String repo = input.getText().toString().trim();
+                        if (!repo.isEmpty()) {
+                            runGitHub(new String[]{"repo", "clone", repo});
+                        }
+                    })
+                    .setNegativeButton(android.R.string.cancel, null)
+                    .show();
+            });
+        }
+    }
+
+    private void ensureGitHubReady(android.widget.TextView status, android.widget.TextView loginLink, android.widget.Button loginBtn, android.widget.Button logoutBtn, android.widget.TextView user, android.widget.Button cloneBtn, android.widget.ListView reposList) {
+        status.setText(R.string.opencode_github_installing);
+        new Thread(() -> {
+            runShell("pkg install -y git gh");
+            runOnUiThread(() -> startGitHubLogin(status, loginLink, loginBtn, logoutBtn, user, cloneBtn, reposList));
+        }, "opencode-gh-install").start();
+    }
+
+    private void startGitHubLogin(android.widget.TextView status, android.widget.TextView loginLink, android.widget.Button loginBtn, android.widget.Button logoutBtn, android.widget.TextView user, android.widget.Button cloneBtn, android.widget.ListView reposList) {
+        new Thread(() -> {
+            String out = runShell("gh auth status 2>&1 | head -5");
+            if (out != null && out.contains("Logged in")) {
+                runOnUiThread(() -> refreshGitHubStatus(status, loginLink, loginBtn, logoutBtn, user, cloneBtn, reposList));
+                return;
+            }
+            String loginOut = runShell("echo y | gh auth login -h github.com -p https --web -s repo,read:org 2>&1");
+            String link = extractGhLink(loginOut);
+            runOnUiThread(() -> {
+                if (link != null && !link.isEmpty()) {
+                    status.setText(R.string.opencode_github_login_instructions);
+                    loginLink.setText(link);
+                    loginLink.setVisibility(View.VISIBLE);
+                    try {
+                        startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(link)));
+                    } catch (Exception ignored) {}
+                    loginBtn.setVisibility(View.GONE);
+                    logoutBtn.setVisibility(View.GONE);
+                } else {
+                    status.setText(R.string.opencode_github_not_logged_in);
+                    loginBtn.setVisibility(View.VISIBLE);
+                }
+            });
+            for (int i = 0; i < 60; i++) {
+                try { Thread.sleep(2000); } catch (Exception ignored) {}
+                String out2 = runShell("gh auth status 2>&1 | head -3");
+                if (out2 != null && out2.contains("Logged in")) {
+                    runOnUiThread(() -> refreshGitHubStatus(status, loginLink, loginBtn, logoutBtn, user, cloneBtn, reposList));
+                    break;
+                }
+            }
+        }, "opencode-gh-login").start();
+    }
+
+    private void refreshGitHubStatus(android.widget.TextView status, android.widget.TextView loginLink, android.widget.Button loginBtn, android.widget.Button logoutBtn, android.widget.TextView user, android.widget.Button cloneBtn, android.widget.ListView reposList) {
+        new Thread(() -> {
+            String who = runShell("gh api user -q .login 2>&1");
+            String repos = runShell("gh repo list --limit 20 --json nameWithOwner -q '.[].nameWithOwner' 2>&1");
+            runOnUiThread(() -> {
+                if (who != null && !who.isEmpty() && !who.contains("error")) {
+                    status.setText(R.string.opencode_github_logged_in);
+                    user.setText(who.trim());
+                    user.setVisibility(View.VISIBLE);
+                    loginLink.setVisibility(View.GONE);
+                    loginBtn.setVisibility(View.GONE);
+                    logoutBtn.setVisibility(View.VISIBLE);
+                    cloneBtn.setVisibility(View.VISIBLE);
+                    if (reposList != null) {
+                        reposList.setVisibility(View.VISIBLE);
+                        String[] items = repos == null || repos.trim().isEmpty() ? new String[]{} : repos.trim().split("\\n");
+                        reposList.setAdapter(new android.widget.ArrayAdapter<>(this, android.R.layout.simple_list_item_1, items));
+                    }
+                } else {
+                    status.setText(R.string.opencode_github_not_logged_in);
+                    user.setVisibility(View.GONE);
+                    loginLink.setVisibility(View.GONE);
+                    loginBtn.setVisibility(View.VISIBLE);
+                    logoutBtn.setVisibility(View.GONE);
+                    cloneBtn.setVisibility(View.GONE);
+                    if (reposList != null) {
+                        reposList.setVisibility(View.GONE);
+                        reposList.setAdapter(null);
+                    }
+                }
+            });
+        }, "opencode-gh-refresh").start();
+    }
+
+    private String extractGhLink(String s) {
+        if (s == null) return null;
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("(https?://github\\.com/login/device[^\s]+)").matcher(s);
+        if (m.find()) return m.group(1);
+        m = java.util.regex.Pattern.compile("(https?://\\S+)").matcher(s);
+        if (m.find()) return m.group(1);
+        return null;
+    }
+
+    private String runShell(String cmd) {
+        try {
+            Process p = Runtime.getRuntime().exec(new String[]{"sh", "-c", cmd});
+            java.io.BufferedReader r = new java.io.BufferedReader(new java.io.InputStreamReader(p.getInputStream()));
+            StringBuilder sb = new StringBuilder();
+            String line;
+            while ((line = r.readLine()) != null) sb.append(line).append('\n');
+            java.io.BufferedReader e = new java.io.BufferedReader(new java.io.InputStreamReader(p.getErrorStream()));
+            while ((line = e.readLine()) != null) sb.append(line).append('\n');
+            p.waitFor();
+            return sb.toString();
+        } catch (Exception ex) {
+            return ex.toString();
+        }
+    }
+
+    private String runGitHub(String[] args) {
+        try {
+            Process p = Runtime.getRuntime().exec(buildGh(args));
+            java.io.BufferedReader r = new java.io.BufferedReader(new java.io.InputStreamReader(p.getInputStream()));
+            StringBuilder sb = new StringBuilder();
+            String line;
+            while ((line = r.readLine()) != null) sb.append(line).append('\n');
+            p.waitFor();
+            return sb.toString();
+        } catch (Exception ex) {
+            return ex.toString();
+        }
+    }
+
+    private String[] buildGh(String[] args) {
+        String prefix = com.termux.shared.termux.TermuxConstants.TERMUX_PREFIX_DIR_PATH;
+        String gh = prefix + "/bin/gh";
+        java.io.File f = new java.io.File(gh);
+        if (!f.exists()) {
+            String[] c = new String[4 + (args == null ? 0 : args.length)];
+            c[0] = "sh";
+            c[1] = "-c";
+            StringBuilder s = new StringBuilder("gh");
+            if (args != null) for (String a : args) s.append(" ").append(quote(a));
+            c[2] = s.toString();
+            c[3] = null;
+        }
+        String[] c = new String[1 + (args == null ? 0 : args.length)];
+        c[0] = f.exists() ? gh : "gh";
+        if (args != null) System.arraycopy(args, 0, c, 1, args.length);
+        return c;
+    }
+
+    private String quote(String a) {
+        if (a == null) return "''";
+        return "'" + a.replace("'", "'\\''") + "'";
+    }
+
     public static Intent newInstance(Context context) {
         Intent intent = new Intent(context, OpenCodeWebActivity.class);
         intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         return intent;
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == REQUEST_NOTIFICATION_PERMISSION) {
+            if (mWebPermissionRequest != null) {
+                if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                    mWebPermissionRequest.grant(mWebPermissionRequest.getResources());
+                } else {
+                    mWebPermissionRequest.deny();
+                }
+                mWebPermissionRequest = null;
+            }
+        }
     }
 
     @Override

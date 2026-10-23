@@ -263,5 +263,17 @@
     <string name="opencode_web_starting">Starting the OpenCode web UI…</string>
     <string name="opencode_web_failed">Could not open the OpenCode web UI.</string>
     <string name="opencode_web_http_error">The OpenCode server returned HTTP %1$d.</string>
+    <string name="opencode_settings">Settings</string>
+    <string name="opencode_extensions">Extensions</string>
+    <string name="opencode_extension_github">GitHub</string>
+    <string name="opencode_github_not_logged_in">Not logged in to GitHub</string>
+    <string name="opencode_github_login">Login with GitHub</string>
+    <string name="opencode_github_logout">Logout</string>
+    <string name="opencode_github_clone">Clone repository</string>
+    <string name="opencode_github_repos">Repositories</string>
+    <string name="opencode_github_installing">Installing gh and git…</string>
+    <string name="opencode_github_login_instructions">Open this link in your browser to login:</string>
+    <string name="opencode_github_logged_in">Logged in</string>
+    <string name="close">Close</string>
 
 </resources>

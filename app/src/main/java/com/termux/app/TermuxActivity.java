@@ -489,7 +489,8 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                             if (mTermuxService == null) return; // Activity might have been destroyed.
                             try {
                                 mTermuxTerminalSessionActivityClient.addNewSession(launchFailsafe, null);
-                                startOpenCode();
+                                // Web UI is primary; terminal is secondary for manual use/installation only.
+                                // Do not auto-start OpenCode TUI here.
                             } catch (WindowManager.BadTokenException e) {
                                 // Activity finished - ignore.
                             }
