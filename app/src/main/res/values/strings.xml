@@ -52,6 +52,11 @@
     <string name="opencode_settings_github_not_installed">Chưa cài đặt</string>
     <string name="opencode_settings_github_clone">Clone repo</string>
     <string name="opencode_settings_github_clone_hint">Repo sẽ được clone vào thư mục HOME của OpenCode.</string>
+    <string name="close">Đóng</string>
+    <string name="opencode_extensions">Tiện ích mở rộng</string>
+    <string name="opencode_extension_github">GitHub</string>
+    <string name="opencode_extension_github_desc">Đăng nhập và quản lý repo GitHub</string>
+    <string name="opencode_github_not_logged_in">Chưa đăng nhập</string>
     <string name="opencode_settings_github_url">Link repo (https://github.com/owner/repo)</string>
 
     <string name="opencode_install_title">Cài đặt OpenCode</string>
@@ -73,6 +78,10 @@
     <string name="opencode_service_notification_text">Web UI đang khả dụng trong nền</string>
     <string name="opencode_service_notification_action_stop">Dừng</string>
     <string name="opencode_service_notification_action_open">Mở Web UI</string>
+    <string name="startup_progress_title">Đang khởi động OpenCode</string>
+    <string name="startup_progress_subtitle">Vui lòng đợi trong khi thiết lập môi trường</string>
+    <string name="startup_progress_log_empty">Chưa có log...</string>
+    <string name="startup_progress_hint">Lần đầu chạy có thể mất vài phút</string>
 
     <string name="bootstrap_installer_body">Đang cài đặt bootstrap Termux…</string>
     <string name="bootstrap_error_title">Không thể cài đặt bootstrap</string>
