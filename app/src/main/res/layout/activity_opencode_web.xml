@@ -169,6 +169,13 @@
                     android:text="@string/opencode_github_not_logged_in"
                     android:textIsSelectable="true" />
 
+                <ProgressBar
+                    android:id="@+id/opencode_github_progress"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:visibility="gone" />
+
                 <TextView
                     android:id="@+id/opencode_github_install_status"
                     android:layout_width="match_parent"
@@ -178,33 +185,27 @@
                     android:textIsSelectable="true"
                     android:visibility="gone" />
 
-                <LinearLayout
+                <Button
+                    android:id="@+id/opencode_github_install_button"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="6dp"
-                    android:orientation="horizontal"
-                    android:gravity="center_vertical">
+                    android:text="Cài đặt git &amp; gh" />
 
-                    <Button
-                        android:id="@+id/opencode_github_install_button"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="Cài đặt git &amp; gh" />
+                <Button
+                    android:id="@+id/opencode_github_login_button"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:text="Đăng nhập GitHub" />
 
-                    <Button
-                        android:id="@+id/opencode_github_login_button"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="Đăng nhập GitHub"
-                        android:visibility="gone" />
-
-                    <Button
-                        android:id="@+id/opencode_github_logout_button"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="Đăng xuất"
-                        android:visibility="gone" />
-                </LinearLayout>
+                <Button
+                    android:id="@+id/opencode_github_logout_button"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:text="Đăng xuất"
+                    android:visibility="gone" />
 
                 <TextView
                     android:id="@+id/opencode_github_user"
@@ -225,6 +226,14 @@
                     android:padding="8dp"
                     android:background="#11000000"
                     android:textIsSelectable="true"
+                    android:visibility="gone" />
+
+                <Button
+                    android:id="@+id/opencode_github_copy_button"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:text="Sao chép mã"
                     android:visibility="gone" />
 
                 <TextView

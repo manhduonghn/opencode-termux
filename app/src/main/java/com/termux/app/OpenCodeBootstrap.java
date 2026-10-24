@@ -151,7 +151,7 @@ public final class OpenCodeBootstrap {
      * ========================================================================================== */
 
     /** Bumped whenever the launcher scripts change so that they get rewritten. */
-    private static final int LAUNCHER_VERSION = 2;
+    private static final int LAUNCHER_VERSION = 3;
 
     private static final String LAUNCHER_MARKER = "Managed by the OpenCode for Termux app. opencode-launcher-version: " + LAUNCHER_VERSION;
 
@@ -1298,6 +1298,17 @@ public final class OpenCodeBootstrap {
             sb.append("# Never load the bionic preload of Termux into a glibc process.\n");
             sb.append("unset LD_PRELOAD\n");
             sb.append("unset LD_LIBRARY_PATH\n");
+            sb.append("\n");
+            sb.append("# Keep the GitHub credentials of the gh CLI visible to the native runtime. Without\n");
+            sb.append("# this the token is only available to interactive shells and GitHub access is\n");
+            sb.append("# hit or miss depending on how the process was started.\n");
+            sb.append("if [ -z \"${GH_TOKEN:-}\" ] && [ -x \"$P/bin/gh\" ]; then\n");
+            sb.append("  GH_TOKEN=$(\"$P/bin/gh\" auth token --hostname github.com 2>/dev/null)\n");
+            sb.append("  [ -n \"$GH_TOKEN\" ] && export GH_TOKEN || unset GH_TOKEN\n");
+            sb.append("fi\n");
+            sb.append("if [ -z \"${GITHUB_TOKEN:-}\" ] && [ -n \"${GH_TOKEN:-}\" ]; then\n");
+            sb.append("  GITHUB_TOKEN=\"$GH_TOKEN\"; export GITHUB_TOKEN\n");
+            sb.append("fi\n");
             sb.append("\n");
             sb.append("MARK=$(cat \"$PATCHED\" 2>/dev/null)\n");
             sb.append("NOW=$(stat -L -c '%s %Y' \"$BIN\" 2>/dev/null)\n");
