@@ -20,8 +20,10 @@ import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.CompoundButton;
+import android.widget.EditText;
 import android.widget.ListView;
 import android.widget.ProgressBar;
 import android.widget.TextView;
@@ -92,20 +94,36 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
         mStatusText = findViewById(R.id.opencode_web_status_text);
         mRetryButton = findViewById(R.id.opencode_web_retry);
 
-        findViewById(R.id.opencode_web_reload_button).setOnClickListener(v -> reloadWebUi());
-        mRetryButton.setOnClickListener(v -> reloadWebUi());
+        findViewById(R.id.opencode_web_reload_button).setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                reloadWebUi();
+            }
+        });
+        mRetryButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                reloadWebUi();
+            }
+        });
 
         View settingsButton = findViewById(R.id.opencode_web_settings_button);
         View settingsPanel = findViewById(R.id.opencode_settings_panel);
         View settingsClose = findViewById(R.id.opencode_settings_close);
         if (settingsButton != null) {
-            settingsButton.setOnClickListener(v -> {
-                if (settingsPanel != null) settingsPanel.setVisibility(View.VISIBLE);
+            settingsButton.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    if (settingsPanel != null) settingsPanel.setVisibility(View.VISIBLE);
+                }
             });
         }
         if (settingsClose != null) {
-            settingsClose.setOnClickListener(v -> {
-                if (settingsPanel != null) settingsPanel.setVisibility(View.GONE);
+            settingsClose.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    if (settingsPanel != null) settingsPanel.setVisibility(View.GONE);
+                }
             });
         }
 
@@ -234,16 +252,19 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
         }
 
         if (!OpenCodeBootstrap.isTermuxBootstrapReady()) {
-            TermuxInstaller.setupBootstrapIfNeeded(this, () -> {
-                // This callback is also invoked when this activity was destroyed in the
-                // meantime. The runtime installation is tied to the application, not to one
-                // activity, so keep going and let the next activity show the progress.
-                if (mStarted && !isFinishing() && !isDestroyed()
-                    && !OpenCodeBootstrap.isRuntimeComplete()) {
-                    TermuxInstaller.showStartupProgress(this, getString(R.string.opencode_installing));
+            TermuxInstaller.setupBootstrapIfNeeded(this, new Runnable() {
+                @Override
+                public void run() {
+                    // This callback is also invoked when this activity was destroyed in the
+                    // meantime. The runtime installation is tied to the application, not to one
+                    // activity, so keep going and let the next activity show the progress.
+                    if (mStarted && !isFinishing() && !isDestroyed()
+                        && !OpenCodeBootstrap.isRuntimeComplete()) {
+                        TermuxInstaller.showStartupProgress(OpenCodeWebActivity.this, getString(R.string.opencode_installing));
+                    }
+                    Context context = getApplicationContext();
+                    OpenCodeBootstrap.setupIfNeeded(context, null);
                 }
-                Context context = getApplicationContext();
-                OpenCodeBootstrap.setupIfNeeded(context, null);
             });
             return;
         }
@@ -294,32 +315,35 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
     }
 
     /** Called on the UI thread whenever the OpenCode installation makes progress. */
-    private final OpenCodeBootstrap.InstallListener mInstallListener = state -> {
-        if (state == null || isFinishing() || isDestroyed()) return;
+    private final OpenCodeBootstrap.InstallListener mInstallListener = new OpenCodeBootstrap.InstallListener() {
+        @Override
+        public void onOpenCodeInstallStateChanged(OpenCodeInstallState state) {
+            if (state == null || isFinishing() || isDestroyed()) return;
 
-        if (state.running) {
-            if (TermuxInstaller.isStartupProgressShowing(this)) {
-                TermuxInstaller.setStartupProgressMessage(this, state.message);
-            } else {
-                TermuxInstaller.showStartupProgress(this, state.message);
+            if (state.running) {
+                if (TermuxInstaller.isStartupProgressShowing(OpenCodeWebActivity.this)) {
+                    TermuxInstaller.setStartupProgressMessage(OpenCodeWebActivity.this, state.message);
+                } else {
+                    TermuxInstaller.showStartupProgress(OpenCodeWebActivity.this, state.message);
+                }
+                return;
             }
-            return;
-        }
 
-        if (state.failed) {
-            TermuxInstaller.dismissStartupProgress();
-            showError(state.error);
-            return;
-        }
+            if (state.failed) {
+                TermuxInstaller.dismissStartupProgress();
+                showError(state.error);
+                return;
+            }
 
-        if (state.done) {
-            TermuxInstaller.dismissStartupProgress();
-            if (!OpenCodeBootstrap.isRuntimeComplete()) return;
-            if (mReloadWebAfterInstall) {
-                mReloadWebAfterInstall = false;
-                loadWebUi();
-            } else {
-                maybeLoadWebUi();
+            if (state.done) {
+                TermuxInstaller.dismissStartupProgress();
+                if (!OpenCodeBootstrap.isRuntimeComplete()) return;
+                if (mReloadWebAfterInstall) {
+                    mReloadWebAfterInstall = false;
+                    loadWebUi();
+                } else {
+                    maybeLoadWebUi();
+                }
             }
         }
     };
@@ -639,28 +663,45 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
             });
         }
         if (loginBtn != null) {
-            loginBtn.setOnClickListener(v -> startGitHubLogin(status, loginLink, loginBtn, logoutBtn, user, cloneBtn, reposList));
+            loginBtn.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    startGitHubLogin(status, loginLink, loginBtn, logoutBtn, user, cloneBtn, reposList);
+                }
+            });
         }
         if (logoutBtn != null) {
-            logoutBtn.setOnClickListener(v -> {
-                runGitHub(new String[]{"auth", "logout", "-h", "github.com", "-y"});
-                refreshGitHubStatus(status, loginLink, loginBtn, logoutBtn, user, cloneBtn, reposList);
+            logoutBtn.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    runGitHub(new String[]{"auth", "logout", "-h", "github.com", "-y"});
+                    refreshGitHubStatus(status, loginLink, loginBtn, logoutBtn, user, cloneBtn, reposList);
+                }
             });
         }
         if (cloneBtn != null) {
-            cloneBtn.setOnClickListener(v -> {
-                android.widget.EditText input = new android.widget.EditText(this);
-                new android.app.AlertDialog.Builder(this)
-                    .setTitle(R.string.opencode_github_clone)
-                    .setView(input)
-                    .setPositiveButton(android.R.string.ok, (d, w) -> {
-                        String repo = input.getText().toString().trim();
-                        if (!repo.isEmpty()) {
-                            runShell("gh repo clone " + repo.replace("'", "'\\''") + " 2>&1");
-                        }
-                    })
-                    .setNegativeButton(android.R.string.cancel, null)
-                    .show();
+            cloneBtn.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    final EditText input = new EditText(OpenCodeWebActivity.this);
+                    new android.app.AlertDialog.Builder(OpenCodeWebActivity.this)
+                        .setTitle(R.string.opencode_github_clone)
+                        .setView(input)
+                        .setPositiveButton(android.R.string.ok, new android.content.DialogInterface.OnClickListener() {
+                            @Override
+                            public void onClick(android.content.DialogInterface d, int w) {
+                                String repo = input.getText().toString();
+                                if (repo != null) {
+                                    repo = repo.trim();
+                                }
+                                if (repo != null && repo.length() > 0) {
+                                    runShell("gh repo clone " + repo.replace("'", "'\\''") + " 2>&1");
+                                }
+                            }
+                        })
+                        .setNegativeButton(android.R.string.cancel, null)
+                        .show();
+                }
             });
         }
     }
@@ -724,7 +765,7 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
                     if (reposList != null) {
                         reposList.setVisibility(View.VISIBLE);
                         String[] items = repos == null || repos.trim().isEmpty() ? new String[]{} : repos.trim().split("\\n");
-                        reposList.setAdapter(new android.widget.ArrayAdapter<>(this, android.R.layout.simple_list_item_1, items));
+                        reposList.setAdapter(new ArrayAdapter<String>(this, android.R.layout.simple_list_item_1, items));
                     }
                 } else {
                     status.setText(R.string.opencode_github_not_logged_in);
