@@ -723,11 +723,20 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
                     new Thread(new Runnable() {
                         @Override
                         public void run() {
-                            String cmd = "git clone " + shellQuote(r);
-                            if (r.indexOf("github.com") < 0 && !r.startsWith("http") && r.indexOf("/") > 0) {
-                                cmd = "git clone https://github.com/" + shellQuote(r).replace("'", "") + ".git";
+                            String url = r;
+                            if (url.indexOf("github.com") < 0 && !url.startsWith("http") && url.indexOf("/") > 0) {
+                                url = "https://github.com/" + url;
+                                if (!url.endsWith(".git")) url = url + ".git";
                             }
+                            final String cmd = "git clone " + shellQuote(url);
                             runShell(cmd, 300000L);
+                            runOnUiThread(new Runnable() {
+                                @Override
+                                public void run() {
+                                    android.widget.Toast.makeText(OpenCodeWebActivity.this,
+                                        "Đã chạy: " + cmd, android.widget.Toast.LENGTH_LONG).show();
+                                }
+                            });
                         }
                     }, "opencode-gh-clone").start();
                 }
@@ -904,7 +913,9 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
             @Override
             public void run() {
                 if (loginBtn != null) { loginBtn.setEnabled(false); loginBtn.setText("Đang đăng nhập..."); }
+                mGitHubCode = null;
                 if (codeView != null) { codeView.setVisibility(View.GONE); codeView.setText(""); }
+                if (mGitHubCopyButton != null) mGitHubCopyButton.setVisibility(View.GONE);
                 if (linkView != null) { linkView.setVisibility(View.GONE); linkView.setText(""); }
                 if (hintView != null) { hintView.setVisibility(View.GONE); hintView.setText(""); }
                 status.setText("Đang chạy: gh auth login -h github.com -p https --web -s repo,read:org");
