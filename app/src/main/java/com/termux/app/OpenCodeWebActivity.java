@@ -751,7 +751,8 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
                 if (loggedIn) {
                     who = runGitHub(new String[]{"api", "user", "-q", ".login"});
                     if (who != null) who = who.trim();
-                    if (who != null && (who.isEmpty() || who.toLowerCase().contains("error"))) who = null;
+                    if (who != null && (who.isEmpty() || who.toLowerCase().contains("error") || who.toLowerCase().contains("not logged"))) who = null;
+                    if (who == null) loggedIn = false;
                 }
                 final boolean gitOkF = gitOk;
                 final boolean ghOkF = ghOk;
@@ -768,7 +769,7 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
                             installStatus.setVisibility(View.VISIBLE);
                         }
                         if (!gitOkF || !ghOkF) {
-                            status.setText("Cần cài đặt git và gh bằng pkg");
+                            status.setText("Chưa cài git/gh. Bấm 'Cài đặt git & gh'");
                             if (installBtn != null) { installBtn.setVisibility(View.VISIBLE); installBtn.setEnabled(true); installBtn.setText("Cài đặt git & gh"); }
                             if (loginBtn != null) { loginBtn.setVisibility(View.GONE); }
                             if (logoutBtn != null) { logoutBtn.setVisibility(View.GONE); }
@@ -776,7 +777,7 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
                         }
                         if (installBtn != null) { installBtn.setVisibility(View.GONE); }
                         if (!loggedInF) {
-                            status.setText("Chưa đăng nhập GitHub");
+                            status.setText("Chưa đăng nhập GitHub. Bấm 'Đăng nhập GitHub'");
                             if (loginBtn != null) { loginBtn.setVisibility(View.VISIBLE); loginBtn.setEnabled(true); loginBtn.setText("Đăng nhập GitHub"); }
                             if (logoutBtn != null) { logoutBtn.setVisibility(View.GONE); }
                             return;
@@ -833,7 +834,7 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
                 if (codeView != null) { codeView.setVisibility(View.GONE); codeView.setText(""); }
                 if (linkView != null) { linkView.setVisibility(View.GONE); linkView.setText(""); }
                 if (hintView != null) { hintView.setVisibility(View.GONE); hintView.setText(""); }
-                status.setText("Đang chạy gh auth login trong Termux...");
+                status.setText("Đang chạy: gh auth login -h github.com -p https --web -s repo,read:org");
             }
         });
         new Thread(new Runnable() {
@@ -845,35 +846,35 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
                 runOnUiThread(new Runnable() {
                     @Override
                     public void run() {
-                        if (codeView != null && code != null && !code.isEmpty()) {
-                            codeView.setText(code);
-                            codeView.setVisibility(View.VISIBLE);
+                        if (code != null && !code.isEmpty()) {
+                            if (codeView != null) { codeView.setText("MÃ XÁC MINH: " + code); codeView.setVisibility(View.VISIBLE); }
                         }
-                        if (linkView != null && link != null && !link.isEmpty()) {
-                            linkView.setText(link);
-                            linkView.setVisibility(View.VISIBLE);
+                        if (link != null && !link.isEmpty()) {
+                            if (linkView != null) { linkView.setText(link); linkView.setVisibility(View.VISIBLE); }
                             try {
                                 startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(link)));
                             } catch (Exception ignored) {
                             }
                         }
                         if (hintView != null) {
-                            StringBuilder hb = new StringBuilder();
-                            hb.append("Sao chép mã trên (nếu có), mở link bên dưới và nhập mã để xác thực.");
-                            hintView.setText(hb.toString());
+                            hintView.setText("Sao chép mã ở trên (nếu có), mở link dưới hoặc trình duyệt vừa mở và nhập mã để hoàn tất đăng nhập.");
                             hintView.setVisibility(View.VISIBLE);
                         }
                         if (loginBtn != null) { loginBtn.setEnabled(true); loginBtn.setText("Đăng nhập lại"); }
-                        status.setText("Đã mở trình duyệt để đăng nhập. Chờ xác thực...");
+                        status.setText("Chờ bạn xác thực trên trình duyệt...");
                     }
                 });
-                for (int i = 0; i < 300; i++) {
+                for (int i = 0; i < 360; i++) {
                     try { Thread.sleep(2000L); } catch (Exception ignored) {}
-                    if (isGhLoggedIn()) {
+                    String st = runGitHub(new String[]{"auth", "status", "-h", "github.com"});
+                    if (st != null && st.toLowerCase().contains("logged in")) {
                         runOnUiThread(new Runnable() {
                             @Override
                             public void run() {
                                 status.setText("Đăng nhập thành công");
+                                if (codeView != null) { codeView.setVisibility(View.GONE); codeView.setText(""); }
+                                if (linkView != null) { linkView.setVisibility(View.GONE); linkView.setText(""); }
+                                if (hintView != null) { hintView.setVisibility(View.GONE); hintView.setText(""); }
                                 updateGitHubState(status, installStatus, installBtn, loginBtn, logoutBtn, user, codeView, linkView, hintView, cloneSection);
                             }
                         });
