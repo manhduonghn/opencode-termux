@@ -714,38 +714,70 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
                     });
                     return;
                 }
-                String loginOut = runShell("printf 'y\\n' | GH_HOST=github.com timeout 600 gh auth login -h github.com -p https --web --scopes repo,read:org,workflow 2>&1");
-                final String link = extractGhLink(loginOut);
-                final String code = extractGhCode(loginOut);
-                runOnUiThread(new Runnable() {
+                new Thread(new Runnable() {
                     @Override
                     public void run() {
-                        String msg = getString(R.string.opencode_github_login_instructions);
-                        if (code != null && code.length() > 0) {
-                            msg = msg + "\n\nMã xác minh: " + code + "\n";
-                        }
-                        status.setText(msg);
-                        if (link != null && link.length() > 0) {
-                            loginLink.setText(link);
-                            loginLink.setVisibility(View.VISIBLE);
-                            loginLink.setOnClickListener(new View.OnClickListener() {
+                        String loginOut = runShell("$PREFIX/bin/gh auth status 2>&1");
+                        if (loginOut != null && loginOut.indexOf("Logged in") >= 0) {
+                            runOnUiThread(new Runnable() {
                                 @Override
-                                public void onClick(View v) {
+                                public void run() {
+                                    refreshGitHubStatus(status, loginLink, loginBtn, logoutBtn, user, cloneBtn, reposList);
+                                }
+                            });
+                            return;
+                        }
+                        runShell("pkg install -y git gh 2>&1");
+                        String linkOut = runShell("$PREFIX/bin/gh auth login -h github.com -p https --web -s repo,read:org 2>&1");
+                        final String link = extractGhLink(linkOut);
+                        final String code = extractGhCode(linkOut);
+                        runOnUiThread(new Runnable() {
+                            @Override
+                            public void run() {
+                                String msg = getString(R.string.opencode_github_login_instructions);
+                                if (code != null && code.length() > 0) {
+                                    msg = msg + "\n\nMã xác minh: " + code + "\n";
+                                }
+                                status.setText(msg);
+                                if (link != null && link.length() > 0) {
+                                    loginLink.setText(link);
+                                    loginLink.setVisibility(View.VISIBLE);
+                                    loginLink.setOnClickListener(new View.OnClickListener() {
+                                        @Override
+                                        public void onClick(View v) {
+                                            try {
+                                                startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(link)));
+                                            } catch (Exception ignored) {
+                                            }
+                                        }
+                                    });
                                     try {
                                         startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(link)));
                                     } catch (Exception ignored) {
                                     }
                                 }
-                            });
+                                loginBtn.setVisibility(View.GONE);
+                                logoutBtn.setVisibility(View.GONE);
+                            }
+                        });
+                        for (int i = 0; i < 180; i++) {
                             try {
-                                startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(link)));
+                                Thread.sleep(2000);
                             } catch (Exception ignored) {
                             }
+                            String s2 = runShell("$PREFIX/bin/gh auth status 2>&1");
+                            if (s2 != null && s2.indexOf("Logged in") >= 0) {
+                                runOnUiThread(new Runnable() {
+                                    @Override
+                                    public void run() {
+                                        refreshGitHubStatus(status, loginLink, loginBtn, logoutBtn, user, cloneBtn, reposList);
+                                    }
+                                });
+                                break;
+                            }
                         }
-                        loginBtn.setVisibility(View.GONE);
-                        logoutBtn.setVisibility(View.GONE);
                     }
-                });
+                }, "opencode-gh-login").start();
                 for (int i = 0; i < 90; i++) {
                     try {
                         Thread.sleep(2000);
