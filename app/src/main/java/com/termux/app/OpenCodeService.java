@@ -135,6 +135,41 @@ public final class OpenCodeService {
     }
 
     /**
+     * Make sure that the daemon is running, without creating a pair link.
+     *
+     * <p>Used by the foreground service, which only has to keep the daemon alive. The pair link is
+     * created by the web activity right before it loads the UI, because it is single use.</p>
+     *
+     * @return {@code true} when the daemon reported its URL
+     */
+    public static boolean ensureStarted(Context context, long startTimeoutMs) {
+        final Context appContext = context.getApplicationContext();
+
+        synchronized (LOCK) {
+            boolean serviceStopped = false;
+            if (sStopRequested) {
+                sStopRequested = false;
+                serviceStopped = stopLocked(appContext);
+            }
+            clearTmpIfRequestedLocked(serviceStopped);
+
+            try {
+                String output = OpenCodeCli.run(appContext, startTimeoutMs, "service", "start");
+                if (firstMatch(URL_PATTERN, output, 0) != null) {
+                    sStopped.set(false);
+                    return true;
+                }
+                Logger.logWarn(LOG_TAG,
+                    "The OpenCode service did not report its URL: " + output.trim());
+            } catch (Exception e) {
+                Logger.logStackTraceWithMessage(LOG_TAG, "Could not start the OpenCode service", e);
+            }
+
+            return false;
+        }
+    }
+
+    /**
      * Stop the background service on a helper thread.
      *
      * <p>The callback is always invoked on the main thread, even when stopping failed. It may be
