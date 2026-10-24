@@ -750,7 +750,11 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
                                 Intent intent = new Intent(OpenCodeWebActivity.this, com.termux.app.TermuxActivity.class);
                                 intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
                                 try {
+                                    intent.putExtra("com.termux.RUN_COMMAND_PATH", path);
                                     intent.putExtra("com.termux.app.extra.CD_PATH", path);
+                                    intent.putExtra("path", path);
+                                    intent.putExtra("cwd", path);
+                                    intent.setData(android.net.Uri.parse("file://" + path));
                                 } catch (Exception ignored) {
                                 }
                                 try {
