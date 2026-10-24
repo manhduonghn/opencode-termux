@@ -57,6 +57,7 @@
     <string name="opencode_extension_github">GitHub</string>
     <string name="opencode_extension_github_desc">Đăng nhập và quản lý repo GitHub</string>
     <string name="opencode_github_not_logged_in">Chưa đăng nhập</string>
+    <string name="opencode_settings_subtitle">Mở rộng &amp; tài khoản</string>
     <string name="opencode_settings_github_url">Link repo (https://github.com/owner/repo)</string>
 
     <string name="opencode_install_title">Cài đặt OpenCode</string>
