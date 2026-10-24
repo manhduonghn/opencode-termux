@@ -843,7 +843,7 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
         java.util.regex.Pattern p = java.util.regex.Pattern.compile("https?://github\\.com/login/device\\S+");
         java.util.regex.Matcher m = p.matcher(s);
         if (m.find()) return m.group();
-        p = java.util.regex.Pattern.compile("https?://github\\.com/.*device.*");
+        p = java.util.regex.Pattern.compile("https?://github\\.com/[^\\s]*device[^\\s]*");
         m = p.matcher(s);
         if (m.find()) return m.group();
         p = java.util.regex.Pattern.compile("https?://\\S+");
