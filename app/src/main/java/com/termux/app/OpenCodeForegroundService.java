@@ -42,7 +42,10 @@ public class OpenCodeForegroundService extends Service {
     public int onStartCommand(Intent intent, int flags, int startId) {
         if (intent != null && ACTION_STOP.equals(intent.getAction())) {
             stopOpenCode();
-            return START_NOT_STICKY;
+            // Keep the service alive so the notification can stay until the daemon actually stops
+            // and the activity can restart it. Returning START_STICKY avoids the app being torn
+            // down with the notification.
+            return START_STICKY;
         }
 
         try {
@@ -92,12 +95,11 @@ public class OpenCodeForegroundService extends Service {
 
     private Notification buildNotification() {
         Intent openIntent = OpenCodeWebActivity.newInstance(this);
-        PendingIntent openPending = PendingIntent.getActivity(this, 100, openIntent,
-            Build.VERSION.SDK_INT >= Build.VERSION_CODES.M ? PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE : PendingIntent.FLAG_UPDATE_CURRENT);
+        int flags = Build.VERSION.SDK_INT >= Build.VERSION_CODES.M ? PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE : PendingIntent.FLAG_UPDATE_CURRENT;
+        PendingIntent openPending = PendingIntent.getActivity(this, 100, openIntent, flags);
 
         Intent stopIntent = new Intent(this, OpenCodeForegroundService.class).setAction(ACTION_STOP);
-        PendingIntent stopPending = PendingIntent.getService(this, 101, stopIntent,
-            Build.VERSION.SDK_INT >= Build.VERSION_CODES.M ? PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE : PendingIntent.FLAG_UPDATE_CURRENT);
+        PendingIntent stopPending = PendingIntent.getService(this, 101, stopIntent, flags);
 
         NotificationCompat.Builder builder = new NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_service_notification)
@@ -107,6 +109,7 @@ public class OpenCodeForegroundService extends Service {
             .setOngoing(true)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .addAction(0, getString(R.string.opencode_service_notification_action_open), openPending)
             .addAction(0, getString(R.string.opencode_service_notification_action_stop), stopPending);
 
@@ -128,26 +131,19 @@ public class OpenCodeForegroundService extends Service {
 
     private void stopOpenCode() {
         final Context app = getApplicationContext();
-        new Thread("opencode-fg-stop") {
-            @Override
-            public void run() {
-                try {
-                    OpenCodeService.stopAsync(app, false, () -> {
-                        notifyStopped();
-                        try {
-                            stopForeground(STOP_FOREGROUND_REMOVE);
-                        } catch (Throwable ignored) {}
-                        stopSelf();
-                    });
-                } catch (Throwable t) {
-                    notifyStopped();
-                    try {
-                        stopForeground(STOP_FOREGROUND_REMOVE);
-                    } catch (Throwable ignored) {}
-                    stopSelf();
-                }
-            }
-        }.start();
+        // Mark as stopped so the activity knows to re-pair, but do NOT clear tmp. Keeping the
+        // foreground notification visible is misleading while the daemon is going away; remove it
+        // cleanly, but leave the process alive enough for the stop to complete and for a visible
+        // activity to restart the service.
+        OpenCodeService.stopAsync(app, false, () -> {
+            notifyStopped();
+            try {
+                stopForeground(STOP_FOREGROUND_REMOVE);
+            } catch (Throwable ignored) {}
+            // Do not call stopSelf() here. If we stopSelf() the notification goes away and
+            // OpenCodeWebActivity.onBackPressed()/moveTaskToBack may finish the app entirely.
+            // The service will be restarted by the activity the next time it comes to foreground.
+        });
     }
 
     /**

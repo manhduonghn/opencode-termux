@@ -256,6 +256,7 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
     }
 
     @Override
+    @Override
     public void onBackPressed() {
         View settingsPanel = findViewById(R.id.opencode_settings_panel);
         if (settingsPanel != null && settingsPanel.getVisibility() == View.VISIBLE) {
@@ -264,10 +265,10 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
         }
         if (mWebView != null && mWebView.canGoBack()) {
             mWebView.goBack();
-        } else {
-            OpenCodeForegroundService.start(this);
-            moveTaskToBack(true);
+            return;
         }
+        OpenCodeForegroundService.start(this);
+        moveTaskToBack(true);
     }
 
     /* ==========================================================================================
