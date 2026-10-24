@@ -1040,6 +1040,10 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
                 }
 
                 boolean loggedIn = isGhLoggedIn();
+                if (loggedIn) {
+                    // Let plain "git clone" use the gh credential helper, including private repos.
+                    runGitHub(new String[]{"auth", "setup-git"});
+                }
                 setGitHubBusy(false);
                 final boolean success = loggedIn;
                 runOnUiThread(new Runnable() {
