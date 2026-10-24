@@ -2,9 +2,11 @@ package com.termux.app;
 
 import android.app.Activity;
 import android.content.ActivityNotFoundException;
+import android.content.BroadcastReceiver;
 import android.content.ClipData;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Build;
@@ -56,8 +58,8 @@ import java.util.Map;
  * <p>The UI itself is the web app served by the OpenCode background service. This activity makes
  * sure that the Termux bootstrap and the OpenCode runtime are present, starts the service,
  * obtains a one time pair link from the OpenCode CLI, and lets the WebView establish its own
- * session cookie. The terminal/OpenTUI is a secondary screen and is opened with the button in
- * the toolbar.</p>
+ * session cookie. A foreground service keeps the daemon alive while the app is in the
+ * background.</p>
  */
 public final class OpenCodeWebActivity extends AppCompatActivity {
 
@@ -81,6 +83,24 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
 
     @Nullable
     private ValueCallback<Uri[]> mFilePathCallback;
+
+    /**
+     * Refreshes the page when the daemon was stopped from the notification action while this
+     * activity is visible. Without it the dead page would stay on screen until the user leaves
+     * and returns to the app.
+     */
+    private final BroadcastReceiver mServiceStoppedReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    reloadIfStopped();
+                }
+            });
+        }
+    };
+    private boolean mServiceStoppedReceiverRegistered = false;
 
     private boolean mStarted = false;
     private boolean mWebUiStarted = false;
@@ -158,6 +178,13 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
         refreshInstallState();
         handleForceUpdateIntent();
 
+        if (!mServiceStoppedReceiverRegistered) {
+            ContextCompat.registerReceiver(this, mServiceStoppedReceiver,
+                new IntentFilter(OpenCodeForegroundService.ACTION_STOPPED),
+                ContextCompat.RECEIVER_NOT_EXPORTED);
+            mServiceStoppedReceiverRegistered = true;
+        }
+
         if (OpenCodeBootstrap.isRuntimeComplete()) {
             OpenCodeForegroundService.start(this);
             maybeLoadWebUi();
@@ -184,6 +211,13 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
     @Override
     protected void onStop() {
         mStarted = false;
+        if (mServiceStoppedReceiverRegistered) {
+            try {
+                unregisterReceiver(mServiceStoppedReceiver);
+            } catch (Throwable ignored) {
+            }
+            mServiceStoppedReceiverRegistered = false;
+        }
         OpenCodeBootstrap.removeInstallListener(mInstallListener);
         // The dialog belongs to this activity. The installation keeps running in the background
         // and the progress is shown again by the next activity or when this one comes back.
