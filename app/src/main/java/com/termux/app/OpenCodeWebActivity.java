@@ -642,6 +642,8 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
                 public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
                     if (isChecked) {
                         githubPanel.setVisibility(View.VISIBLE);
+                        if (loginBtn != null) { loginBtn.setVisibility(View.VISIBLE); loginBtn.setEnabled(true); loginBtn.setText("Đăng nhập GitHub"); }
+                        if (logoutBtn != null) { logoutBtn.setVisibility(View.GONE); }
                         updateGitHubState(status, installStatus, installBtn, loginBtn, logoutBtn, user, codeView, linkView, hintView, cloneSection);
                     } else {
                         githubPanel.setVisibility(View.GONE);
