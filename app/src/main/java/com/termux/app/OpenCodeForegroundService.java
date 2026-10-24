@@ -106,16 +106,13 @@ public class OpenCodeForegroundService extends Service {
 
     private void ensureOpenCodeRunning() {
         final Context app = getApplicationContext();
+        if (!OpenCodeBootstrap.isRuntimeComplete()) return;
         new Thread("opencode-fg-ensure") {
             @Override
             public void run() {
-                try {
-                    if (!OpenCodeService.isRunning()) {
-                        OpenCodeService.startAndPair(app, 60000L, 60000L);
-                    }
-                } catch (Throwable t) {
-                    // Best effort
-                }
+                // The call is serialized with the pair/stop calls of the web activity by the lock
+                // inside OpenCodeService, so it can never kill a daemon that is just starting.
+                OpenCodeService.ensureStarted(app, 60000L);
             }
         }.start();
     }

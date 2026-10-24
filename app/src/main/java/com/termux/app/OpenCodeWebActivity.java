@@ -158,8 +158,10 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
         refreshInstallState();
         handleForceUpdateIntent();
 
-        if (OpenCodeBootstrap.isRuntimeComplete()) maybeLoadWebUi();
-        OpenCodeForegroundService.start(this);
+        if (OpenCodeBootstrap.isRuntimeComplete()) {
+            OpenCodeForegroundService.start(this);
+            maybeLoadWebUi();
+        }
     }
 
     @Override
@@ -200,7 +202,7 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
         // the last terminal session was closed), the old page is dead even though the activity
         // is still alive, so pair again.
         reloadIfStopped();
-        OpenCodeForegroundService.start(this);
+        if (OpenCodeBootstrap.isRuntimeComplete()) OpenCodeForegroundService.start(this);
     }
 
     @Override
