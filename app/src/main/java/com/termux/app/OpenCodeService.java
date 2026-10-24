@@ -60,6 +60,10 @@ public final class OpenCodeService {
      */
     private static final AtomicBoolean sClearTmpRequested = new AtomicBoolean(false);
 
+    public static boolean isRunning() {
+        return !sStopped.get() && !sStopRequested;
+    }
+
     private OpenCodeService() {
     }
 

@@ -10,6 +10,7 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.SystemClock;
+import androidx.annotation.NonNull;
 import android.view.View;
 import android.webkit.CookieManager;
 import android.webkit.PermissionRequest;
@@ -158,6 +159,7 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
         handleForceUpdateIntent();
 
         if (OpenCodeBootstrap.isRuntimeComplete()) maybeLoadWebUi();
+        OpenCodeForegroundService.start(this);
     }
 
     @Override
@@ -198,6 +200,7 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
         // the last terminal session was closed), the old page is dead even though the activity
         // is still alive, so pair again.
         reloadIfStopped();
+        OpenCodeForegroundService.start(this);
     }
 
     @Override
@@ -226,7 +229,8 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
         if (mWebView != null && mWebView.canGoBack()) {
             mWebView.goBack();
         } else {
-            super.onBackPressed();
+            OpenCodeForegroundService.start(this);
+            moveTaskToBack(true);
         }
     }
 
@@ -365,15 +369,26 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
     @SuppressWarnings("deprecation")
     private void requestNotificationPermissionIfNeeded() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+            OpenCodeForegroundService.start(this);
             return;
         }
         if (ContextCompat.checkSelfPermission(this, android.Manifest.permission.POST_NOTIFICATIONS)
                 == PackageManager.PERMISSION_GRANTED) {
+            OpenCodeForegroundService.start(this);
             return;
         }
         ActivityCompat.requestPermissions(this,
                 new String[]{android.Manifest.permission.POST_NOTIFICATIONS},
                 REQUEST_NOTIFICATION_PERMISSION);
+    }
+
+    @Override
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == REQUEST_NOTIFICATION_PERMISSION) {
+            OpenCodeForegroundService.start(this);
+        }
     }
 
     private void configureWebView() {
