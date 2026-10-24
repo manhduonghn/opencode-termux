@@ -21,6 +21,7 @@ import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.Button;
+import android.widget.CompoundButton;
 import android.widget.ListView;
 import android.widget.ProgressBar;
 import android.widget.TextView;
@@ -625,12 +626,15 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
         ListView reposList = findViewById(R.id.opencode_github_repos_list);
 
         if (githubCheck != null && githubPanel != null) {
-            githubCheck.setOnCheckedChangeListener((buttonView, isChecked) -> {
-                if (isChecked) {
-                    githubPanel.setVisibility(View.VISIBLE);
-                    ensureGitHubReady(status, loginLink, loginBtn, logoutBtn, user, cloneBtn, reposList);
-                } else {
-                    githubPanel.setVisibility(View.GONE);
+            githubCheck.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+                @Override
+                public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
+                    if (isChecked) {
+                        githubPanel.setVisibility(View.VISIBLE);
+                        ensureGitHubReady(status, loginLink, loginBtn, logoutBtn, user, cloneBtn, reposList);
+                    } else {
+                        githubPanel.setVisibility(View.GONE);
+                    }
                 }
             });
         }
