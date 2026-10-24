@@ -735,7 +735,30 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
                     if (reposList != null) {
                         reposList.setVisibility(View.VISIBLE);
                         String[] items = repos == null || repos.trim().isEmpty() ? new String[]{} : repos.trim().split("\\n");
+                        final String[] repoItems = items;
                         reposList.setAdapter(new ArrayAdapter(this, android.R.layout.simple_list_item_1, items));
+                        reposList.setOnItemClickListener(new android.widget.AdapterView.OnItemClickListener() {
+                            @Override
+                            public void onItemClick(android.widget.AdapterView<?> parent, android.view.View view, int position, long id) {
+                                if (repoItems == null || position < 0 || position >= repoItems.length) return;
+                                String repo = repoItems[position];
+                                if (repo == null) return;
+                                int slash = repo.indexOf('/');
+                                String name = slash >= 0 ? repo.substring(slash + 1) : repo;
+                                String home = com.termux.shared.termux.TermuxConstants.TERMUX_HOME_DIR_PATH;
+                                String path = home + "/" + name;
+                                Intent intent = new Intent(OpenCodeWebActivity.this, com.termux.app.TermuxActivity.class);
+                                intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+                                try {
+                                    intent.putExtra("com.termux.app.extra.CD_PATH", path);
+                                } catch (Exception ignored) {
+                                }
+                                try {
+                                    startActivity(intent);
+                                } catch (Exception ignored) {
+                                }
+                            }
+                        });
                     }
                 } else {
                     status.setText(R.string.opencode_github_not_logged_in);
@@ -746,6 +769,7 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
                     cloneBtn.setVisibility(View.GONE);
                     if (reposList != null) {
                         reposList.setVisibility(View.GONE);
+                        reposList.setOnItemClickListener(null);
                         reposList.setAdapter(null);
                     }
                 }
