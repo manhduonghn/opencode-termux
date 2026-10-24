@@ -39,6 +39,7 @@ import com.termux.R;
 import com.termux.shared.logger.Logger;
 
 import java.util.Collections;
+import java.util.HashMap;
 
 /**
  * The main screen of the app: the OpenCode web UI inside an in-app WebView.
@@ -604,8 +605,9 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
                     // The server only answers the one time pair link with the session cookie
                     // redirect when the request looks like a browser navigation. WebView sends
                     // this by default, but be explicit so the pair link can never return JSON.
-                    mWebView.loadUrl(url, Collections.singletonMap(
-                        "Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"));
+                    HashMap<String, String> headers = new HashMap<String, String>();
+                    headers.put("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8");
+                    mWebView.loadUrl(url, headers);
                 } else {
                     mWebUiStarted = false;
                     showError(message);
@@ -765,7 +767,7 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
                     if (reposList != null) {
                         reposList.setVisibility(View.VISIBLE);
                         String[] items = repos == null || repos.trim().isEmpty() ? new String[]{} : repos.trim().split("\\n");
-                        reposList.setAdapter(new ArrayAdapter<String>(this, android.R.layout.simple_list_item_1, items));
+                        reposList.setAdapter(new ArrayAdapter(this, android.R.layout.simple_list_item_1, items));
                     }
                 } else {
                     status.setText(R.string.opencode_github_not_logged_in);
