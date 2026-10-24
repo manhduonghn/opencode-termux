@@ -73,7 +73,7 @@ public class OpenCodeForegroundService extends Service {
             if (nm.getNotificationChannel(CHANNEL_ID) != null) return;
 
             CharSequence name = getString(R.string.opencode_service_notification_channel_name);
-            CharSequence desc = getString(R.string.opencode_service_notification_channel_desc);
+            String desc = getString(R.string.opencode_service_notification_channel_desc);
             NotificationChannel channel = new NotificationChannel(CHANNEL_ID, name, NotificationManager.IMPORTANCE_LOW);
             channel.setDescription(desc);
             channel.setShowBadge(false);
