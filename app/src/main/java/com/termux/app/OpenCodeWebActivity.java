@@ -739,6 +739,8 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
                 if (hintView != null) { hintView.setVisibility(View.GONE); hintView.setText(""); }
                 if (user != null) { user.setVisibility(View.GONE); user.setText(""); }
                 if (cloneSection != null) cloneSection.setVisibility(View.GONE);
+                if (loginBtn != null) { loginBtn.setVisibility(View.VISIBLE); loginBtn.setEnabled(true); loginBtn.setText("Đăng nhập GitHub"); }
+                if (logoutBtn != null) { logoutBtn.setVisibility(View.GONE); }
             }
         });
         new Thread(new Runnable() {
@@ -771,7 +773,7 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
                         if (!gitOkF || !ghOkF) {
                             status.setText("Chưa cài git/gh. Bấm 'Cài đặt git & gh'");
                             if (installBtn != null) { installBtn.setVisibility(View.VISIBLE); installBtn.setEnabled(true); installBtn.setText("Cài đặt git & gh"); }
-                            if (loginBtn != null) { loginBtn.setVisibility(View.GONE); }
+                            if (loginBtn != null) { loginBtn.setVisibility(View.VISIBLE); loginBtn.setEnabled(true); loginBtn.setText("Đăng nhập GitHub"); }
                             if (logoutBtn != null) { logoutBtn.setVisibility(View.GONE); }
                             return;
                         }
