@@ -19,13 +19,13 @@ import java.util.regex.Pattern;
  * <p>The service is a separate process that is started with {@code opencode service start} and
  * stopped with {@code opencode service stop}. Each of those commands takes over the registration
  * file and the listening port, so they must never run concurrently. They can be triggered from
- * several places at the same time: the web activity while it loads the UI, the notification exit
- * action and the terminal when the last session exits. Without a process wide lock the commands
+ * several places at the same time: the web activity while it loads the UI and the GitHub settings
+ * while they restart the service. Without a process wide lock the commands
  * interleave, a stop can kill a service that was just started (or the other way around) and the
  * next {@code onStart()} of the web activity can reuse a stale one time pair link.</p>
  *
  * <p>All start/stop/pair operations are therefore executed while holding {@link #LOCK}. A stop is
- * performed on a helper thread so that the UI and {@code TermuxService} are never blocked. When a
+ * performed on a helper thread so that the UI is never blocked. When a
  * stop has been requested, {@link #consumeStoppedByUser()} tells the web activity that its current
  * page belongs to a dead service and that it has to pair again.</p>
  */

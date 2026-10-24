@@ -2,7 +2,7 @@
 
 <!DOCTYPE resources [
     <!ENTITY TERMUX_PACKAGE_NAME "com.termux">
-    <!ENTITY TERMUX_APP_NAME "Termux">
+    <!ENTITY TERMUX_APP_NAME "OpenCode">
     <!ENTITY TERMUX_API_APP_NAME "Termux:API">
     <!ENTITY TERMUX_BOOT_APP_NAME "Termux:Boot">
     <!ENTITY TERMUX_FLOAT_APP_NAME "Termux:Float">
@@ -260,12 +260,11 @@
     <string name="action_toggle_opencode_prompt">Toggle the OpenCode input bar</string>
     <string name="opencode_update_requested">Updating OpenCode, watch the notification…</string>
     <string name="action_open_web">Open Web UI</string>
-    <string name="opencode_web_title">OpenCode Web</string>
+    <string name="opencode_web_title">OpenCode</string>
     <string name="opencode_web_brand">OpenCode</string>
-    <string name="opencode_web_brand_subtitle">Termux · Web UI</string>
+    <string name="opencode_web_brand_subtitle">Web UI</string>
     <string name="opencode_web_brand_caption">AI coding agent</string>
     <string name="opencode_web_first_run_hint">Lần đầu khởi động có thể mất vài phút để tải bootstrap, thư viện và OpenCode.</string>
-    <string name="opencode_web_terminal">Terminal</string>
     <string name="opencode_web_reload">Tải lại</string>
     <string name="opencode_web_retry">Thử lại</string>
     <string name="opencode_web_starting">Đang khởi động giao diện web OpenCode…</string>

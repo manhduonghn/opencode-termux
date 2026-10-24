@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Foreground of the launcher icon: a bold terminal prompt. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Chevron ">" -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M29,35 L37,27 L65,54 L37,81 L29,73 L49,54 Z" />
+
+    <!-- Cursor "_" -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M60,73 h16 a5,5 0 0,1 5,5 a5,5 0 0,1 -5,5 h-16 a5,5 0 0,1 -5,-5 a5,5 0 0,1 5,-5 z" />
+</vector>

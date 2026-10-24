@@ -230,11 +230,6 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
         }
     }
 
-    /** The terminal/OpenTUI is a separate Termux screen. */
-    private void openTerminal() {
-        startActivity(new Intent(this, TermuxActivity.class));
-    }
-
     /* ==========================================================================================
      * Runtime setup
      * ========================================================================================== */
