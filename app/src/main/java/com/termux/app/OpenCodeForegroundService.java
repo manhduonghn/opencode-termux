@@ -20,6 +20,8 @@ public class OpenCodeForegroundService extends Service {
 
     public static final String ACTION_STOP = "com.termux.opencode.ACTION_STOP";
     public static final String ACTION_START = "com.termux.opencode.ACTION_START";
+    /** Sent after the daemon was stopped from the notification action. */
+    public static final String ACTION_STOPPED = "com.termux.opencode.SERVICE_STOPPED";
 
     private static final String CHANNEL_ID = "opencode_service_channel";
     private static final String CHANNEL_NAME_RES = "opencode_service_notification_channel_name";
@@ -43,7 +45,14 @@ public class OpenCodeForegroundService extends Service {
             return START_NOT_STICKY;
         }
 
-        startForeground(NOTIFICATION_ID, buildNotification());
+        try {
+            startForeground(NOTIFICATION_ID, buildNotification());
+        } catch (Throwable t) {
+            // Android 12+ refuses to promote a service that was restarted while the app is in the
+            // background. Stop instead of crashing, the activity will start it again.
+            stopSelf();
+            return START_NOT_STICKY;
+        }
         ensureOpenCodeRunning();
         return START_STICKY;
     }
@@ -124,12 +133,14 @@ public class OpenCodeForegroundService extends Service {
             public void run() {
                 try {
                     OpenCodeService.stopAsync(app, false, () -> {
+                        notifyStopped();
                         try {
                             stopForeground(STOP_FOREGROUND_REMOVE);
                         } catch (Throwable ignored) {}
                         stopSelf();
                     });
                 } catch (Throwable t) {
+                    notifyStopped();
                     try {
                         stopForeground(STOP_FOREGROUND_REMOVE);
                     } catch (Throwable ignored) {}
@@ -137,6 +148,18 @@ public class OpenCodeForegroundService extends Service {
                 }
             }
         }.start();
+    }
+
+    /**
+     * Tell a visible web activity that the current page belongs to a daemon that is gone, so it can
+     * pair again right away instead of waiting for the next {@code onResume()}.
+     */
+    private void notifyStopped() {
+        Intent intent = new Intent(ACTION_STOPPED).setPackage(getPackageName());
+        try {
+            sendBroadcast(intent);
+        } catch (Throwable ignored) {
+        }
     }
 
     private void acquireWakeLock() {
