@@ -38,7 +38,6 @@ import androidx.appcompat.app.AppCompatActivity;
 import com.termux.R;
 import com.termux.shared.logger.Logger;
 
-import java.util.Collections;
 import java.util.HashMap;
 
 /**
@@ -67,9 +66,6 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
 
     @Nullable
     private ValueCallback<Uri[]> mFilePathCallback;
-
-    @Nullable
-    private PermissionRequest mWebPermissionRequest;
 
     private boolean mStarted = false;
     private boolean mWebUiStarted = false;
@@ -468,40 +464,12 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
                     request.deny();
                     return;
                 }
-                boolean needsNotification = false;
-                for (String res : resources) {
-                    if (PermissionRequest.RESOURCE_NOTIFICATION.equals(res)) {
-                        needsNotification = true;
-                        break;
-                    }
-                }
-                if (needsNotification) {
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                        if (ContextCompat.checkSelfPermission(OpenCodeWebActivity.this,
-                                android.Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
-                            request.grant(resources);
-                            return;
-                        }
-                        mWebPermissionRequest = request;
-                        ActivityCompat.requestPermissions(OpenCodeWebActivity.this,
-                                new String[]{android.Manifest.permission.POST_NOTIFICATIONS},
-                                REQUEST_NOTIFICATION_PERMISSION);
-                        return;
-                    } else {
-                        request.grant(resources);
-                        return;
-                    }
-                }
+                // The web UI only needs its own notification permission, which is requested
+                // from the activity when it is created.
                 request.grant(resources);
             }
 
-            @Override
-            public void onPermissionRequestCanceled(PermissionRequest request) {
-                if (request != null && request == mWebPermissionRequest) {
-                    mWebPermissionRequest = null;
-                }
-                super.onPermissionRequestCanceled(request);
-            }
+
         });
     }
 
@@ -858,21 +826,7 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
     @Override
     public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        if (requestCode == REQUEST_NOTIFICATION_PERMISSION) {
-            if (mWebPermissionRequest != null) {
-                if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                    String[] res = mWebPermissionRequest.getResources();
-                    if (res != null) {
-                        mWebPermissionRequest.grant(res);
-                    } else {
-                        mWebPermissionRequest.deny();
-                    }
-                } else {
-                    mWebPermissionRequest.deny();
-                }
-                mWebPermissionRequest = null;
-            }
-        }
+        // Nothing to forward: the notification permission is requested by the activity itself.
     }
 
     @Override
