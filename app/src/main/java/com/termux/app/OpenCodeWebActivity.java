@@ -9,6 +9,7 @@ import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.SystemClock;
 import android.view.View;
 import android.webkit.CookieManager;
 import android.webkit.PermissionRequest;
@@ -37,8 +38,16 @@ import androidx.appcompat.app.AppCompatActivity;
 
 import com.termux.R;
 import com.termux.shared.logger.Logger;
+import com.termux.shared.termux.TermuxConstants;
+import com.termux.shared.termux.shell.command.environment.TermuxShellEnvironment;
 
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.InputStreamReader;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 /**
  * The main screen of the app: the OpenCode web UI inside an in-app WebView.
@@ -647,13 +656,18 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
             logoutBtn.setOnClickListener(new View.OnClickListener() {
                 @Override
                 public void onClick(View v) {
-                    runShell("gh auth logout -h github.com -y 2>&1");
-                    runOnUiThread(new Runnable() {
+                    new Thread(new Runnable() {
                         @Override
                         public void run() {
-                            refreshGitHubStatus(status, loginLink, loginBtn, logoutBtn, user, cloneBtn, reposList);
+                            runGitHub(new String[]{"auth", "logout", "-h", "github.com", "-y"});
+                            runOnUiThread(new Runnable() {
+                                @Override
+                                public void run() {
+                                    refreshGitHubStatus(status, loginLink, loginBtn, logoutBtn, user, cloneBtn, reposList);
+                                }
+                            });
                         }
-                    });
+                    }, "opencode-gh-logout").start();
                 }
             });
         }
@@ -673,7 +687,13 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
                                     repo = repo.trim();
                                 }
                                 if (repo != null && repo.length() > 0) {
-                                    runShell("gh repo clone " + repo.replace("'", "'\\''") + " 2>&1");
+                                    final String r = repo;
+                                    new Thread(new Runnable() {
+                                        @Override
+                                        public void run() {
+                                            runGitHub(new String[]{"repo", "clone", r});
+                                        }
+                                    }, "opencode-gh-clone").start();
                                 }
                             }
                         })
@@ -685,11 +705,16 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
     }
 
     private void ensureGitHubReady(final android.widget.TextView status, final android.widget.TextView loginLink, final android.widget.Button loginBtn, final android.widget.Button logoutBtn, final android.widget.TextView user, final android.widget.Button cloneBtn, final ListView reposList) {
-        status.setText(R.string.opencode_github_installing);
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                status.setText(R.string.opencode_github_waiting_pkg);
+            }
+        });
         new Thread(new Runnable() {
             @Override
             public void run() {
-                runShell("pkg install -y git gh 2>&1");
+                runShell("pkg install -y git gh 2>&1", 300000L);
                 runOnUiThread(new Runnable() {
                     @Override
                     public void run() {
@@ -704,8 +729,17 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
         new Thread(new Runnable() {
             @Override
             public void run() {
-                String out = runShell("gh auth status 2>&1");
-                if (out != null && out.indexOf("Logged in") >= 0) {
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        status.setText(R.string.opencode_github_checking);
+                        loginLink.setVisibility(View.GONE);
+                        loginBtn.setVisibility(View.GONE);
+                        logoutBtn.setVisibility(View.GONE);
+                    }
+                });
+                String out = runGitHub(new String[]{"auth", "status", "-h", "github.com"});
+                if (out != null && out.toLowerCase().contains("logged in")) {
                     runOnUiThread(new Runnable() {
                         @Override
                         public void run() {
@@ -714,77 +748,73 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
                     });
                     return;
                 }
-                new Thread(new Runnable() {
+                runOnUiThread(new Runnable() {
                     @Override
                     public void run() {
-                        String loginOut = runShell("$PREFIX/bin/gh auth status 2>&1");
-                        if (loginOut != null && loginOut.indexOf("Logged in") >= 0) {
-                            runOnUiThread(new Runnable() {
-                                @Override
-                                public void run() {
-                                    refreshGitHubStatus(status, loginLink, loginBtn, logoutBtn, user, cloneBtn, reposList);
-                                }
-                            });
-                            return;
+                        status.setText(R.string.opencode_github_waiting_pkg);
+                    }
+                });
+                runShell("pkg install -y git gh 2>&1", 300000L);
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        status.setText(R.string.opencode_github_auth_start);
+                        loginLink.setVisibility(View.GONE);
+                    }
+                });
+                String linkOut = runGitHub(new String[]{"auth", "login", "-h", "github.com", "-p", "https", "--web", "-s", "repo", "-s", "read:org"});
+                final String link = extractGhLink(linkOut);
+                final String code = extractGhCode(linkOut);
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        StringBuilder msg = new StringBuilder();
+                        msg.append(getString(R.string.opencode_github_login_instructions));
+                        if (code != null && code.length() > 0) {
+                            msg.append("\n\nMã xác minh: ").append(code).append("\n");
                         }
-                        runShell("pkg install -y git gh 2>&1");
-                        String linkOut = runShell("$PREFIX/bin/gh auth login -h github.com -p https --web -s repo,read:org 2>&1");
-                        final String link = extractGhLink(linkOut);
-                        final String code = extractGhCode(linkOut);
-                        runOnUiThread(new Runnable() {
-                            @Override
-                            public void run() {
-                                String msg = getString(R.string.opencode_github_login_instructions);
-                                if (code != null && code.length() > 0) {
-                                    msg = msg + "\n\nMã xác minh: " + code + "\n";
-                                }
-                                status.setText(msg);
-                                if (link != null && link.length() > 0) {
-                                    loginLink.setText(link);
-                                    loginLink.setVisibility(View.VISIBLE);
-                                    loginLink.setOnClickListener(new View.OnClickListener() {
-                                        @Override
-                                        public void onClick(View v) {
-                                            try {
-                                                startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(link)));
-                                            } catch (Exception ignored) {
-                                            }
-                                        }
-                                    });
+                        status.setText(msg.toString());
+                        if (link != null && link.length() > 0) {
+                            loginLink.setText(link);
+                            loginLink.setVisibility(View.VISIBLE);
+                            loginLink.setOnClickListener(new View.OnClickListener() {
+                                @Override
+                                public void onClick(View v) {
                                     try {
                                         startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(link)));
                                     } catch (Exception ignored) {
                                     }
                                 }
-                                loginBtn.setVisibility(View.GONE);
-                                logoutBtn.setVisibility(View.GONE);
-                            }
-                        });
-                        for (int i = 0; i < 180; i++) {
+                            });
                             try {
-                                Thread.sleep(2000);
+                                startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(link)));
                             } catch (Exception ignored) {
                             }
-                            String s2 = runShell("$PREFIX/bin/gh auth status 2>&1");
-                            if (s2 != null && s2.indexOf("Logged in") >= 0) {
-                                runOnUiThread(new Runnable() {
-                                    @Override
-                                    public void run() {
-                                        refreshGitHubStatus(status, loginLink, loginBtn, logoutBtn, user, cloneBtn, reposList);
-                                    }
-                                });
-                                break;
-                            }
+                            status.setText(msg.toString() + "\n" + getString(R.string.opencode_github_open_browser));
                         }
+                        loginBtn.setVisibility(View.GONE);
+                        logoutBtn.setVisibility(View.GONE);
                     }
-                }, "opencode-gh-login").start();
-                for (int i = 0; i < 90; i++) {
+                });
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        status.setText(status.getText() + "\n" + getString(R.string.opencode_github_wait_auth));
+                    }
+                });
+                for (int i = 0; i < 240; i++) {
                     try {
-                        Thread.sleep(2000);
+                        Thread.sleep(2000L);
                     } catch (Exception ignored) {
                     }
-                    String out2 = runShell("gh auth status 2>&1");
-                    if (out2 != null && out2.indexOf("Logged in") >= 0) {
+                    String s2 = runGitHub(new String[]{"auth", "status", "-h", "github.com"});
+                    if (s2 != null && s2.toLowerCase().contains("logged in")) {
+                        runOnUiThread(new Runnable() {
+                            @Override
+                            public void run() {
+                                status.setText(R.string.opencode_github_done);
+                            }
+                        });
                         runOnUiThread(new Runnable() {
                             @Override
                             public void run() {
@@ -802,12 +832,12 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
         new Thread(new Runnable() {
             @Override
             public void run() {
-                String who = runShell("gh api user -q .login 2>&1");
-                String repos = runShell("gh repo list --limit 50 --json nameWithOwner -q '.[].nameWithOwner' 2>&1");
+                String who = runGitHub(new String[]{"api", "user", "-q", ".login"});
+                String repos = runGitHub(new String[]{"repo", "list", "--limit", "50", "--json", "nameWithOwner", "-q", ".[].nameWithOwner"});
                 runOnUiThread(new Runnable() {
                     @Override
                     public void run() {
-                        if (who != null && who.trim().length() > 0 && who.indexOf("error") < 0 && who.indexOf("not logged") < 0) {
+                        if (who != null && who.trim().length() > 0 && who.indexOf("error") < 0 && who.toLowerCase().indexOf("not logged") < 0) {
                             status.setText(R.string.opencode_github_logged_in);
                             user.setText(who.trim());
                             user.setVisibility(View.VISIBLE);
@@ -831,9 +861,11 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
                                         if (repoItems == null || position < 0 || position >= repoItems.length) return;
                                         String repo = repoItems[position];
                                         if (repo == null) return;
+                                        repo = repo.trim();
+                                        if (repo.length() == 0) return;
                                         int slash = repo.indexOf('/');
                                         String name = slash >= 0 ? repo.substring(slash + 1) : repo;
-                                        String home = com.termux.shared.termux.TermuxConstants.TERMUX_HOME_DIR_PATH;
+                                        String home = TermuxConstants.TERMUX_HOME_DIR_PATH;
                                         String path = home + "/" + name;
                                         Intent intent = new Intent(OpenCodeWebActivity.this, com.termux.app.TermuxActivity.class);
                                         intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
@@ -874,13 +906,16 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
         if (s == null) return null;
         java.util.regex.Pattern p = java.util.regex.Pattern.compile("https?://github\\.com/login/device\\S+");
         java.util.regex.Matcher m = p.matcher(s);
-        if (m.find()) return m.group();
-        p = java.util.regex.Pattern.compile("https?://github\\.com[^\\s]*device[^\\s]*");
+        if (m.find()) return m.group().trim();
+        p = java.util.regex.Pattern.compile("https?://github\\.com/[^\\s]+device[^\\s]*", java.util.regex.Pattern.CASE_INSENSITIVE);
         m = p.matcher(s);
-        if (m.find()) return m.group();
+        if (m.find()) return m.group().trim();
+        p = java.util.regex.Pattern.compile("https?://[^\\s]+/login[^\\s]*", java.util.regex.Pattern.CASE_INSENSITIVE);
+        m = p.matcher(s);
+        if (m.find()) return m.group().trim();
         p = java.util.regex.Pattern.compile("https?://[^\\s]+");
         m = p.matcher(s);
-        if (m.find()) return m.group();
+        if (m.find()) return m.group().trim();
         return null;
     }
 
@@ -899,39 +934,140 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
     }
 
     private String runShell(String cmd) {
+        return runShell(cmd, 120000L);
+    }
+
+    private String runShell(String cmd, long timeoutMs) {
         try {
-            Process p = Runtime.getRuntime().exec(new String[]{"sh", "-c", cmd});
-            java.io.BufferedReader r = new java.io.BufferedReader(new java.io.InputStreamReader(p.getInputStream()));
-            StringBuilder sb = new StringBuilder();
-            String line;
-            while ((line = r.readLine()) != null) sb.append(line).append('\n');
-            java.io.BufferedReader e = new java.io.BufferedReader(new java.io.InputStreamReader(p.getErrorStream()));
-            while ((line = e.readLine()) != null) sb.append(line).append('\n');
-            p.waitFor();
-            return sb.toString();
+            ProcessBuilder builder = new ProcessBuilder("sh", "-c", cmd);
+            applyTermuxEnv(builder);
+            builder.directory(new File(TermuxConstants.TERMUX_HOME_DIR_PATH));
+            builder.redirectErrorStream(true);
+
+            final Process process = builder.start();
+            final StringBuilder output = new StringBuilder();
+
+            Thread reader = new Thread(() -> {
+                try (BufferedReader in = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
+                    String line;
+                    while ((line = in.readLine()) != null) {
+                        synchronized (output) {
+                            output.append(line).append('\n');
+                        }
+                    }
+                } catch (Exception ignored) {
+                }
+            }, "opencode-gh-shell-reader");
+            reader.setDaemon(true);
+            reader.start();
+
+            long deadline = SystemClock.uptimeMillis() + timeoutMs;
+            while (true) {
+                try {
+                    process.exitValue();
+                    break;
+                } catch (IllegalThreadStateException e) {
+                    if (SystemClock.uptimeMillis() > deadline) {
+                        process.destroy();
+                        try {
+                            process.waitFor();
+                        } catch (Exception ignored) {
+                        }
+                        break;
+                    }
+                    try {
+                        Thread.sleep(50L);
+                    } catch (InterruptedException interrupted) {
+                        Thread.currentThread().interrupt();
+                        process.destroy();
+                        break;
+                    }
+                }
+            }
+
+            reader.join(1000L);
+            synchronized (output) {
+                return output.toString();
+            }
         } catch (Exception ex) {
             return ex.toString();
         }
     }
 
+    private void applyTermuxEnv(ProcessBuilder builder) {
+        Map<String, String> processEnv = builder.environment();
+        processEnv.clear();
+        try {
+            processEnv.putAll(new TermuxShellEnvironment().getEnvironment(this, false));
+        } catch (Exception ignored) {
+            processEnv.put("HOME", TermuxConstants.TERMUX_HOME_DIR_PATH);
+            processEnv.put("PREFIX", TermuxConstants.TERMUX_PREFIX_DIR_PATH);
+            String path = TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH + ":" + processEnv.getOrDefault("PATH", "");
+            processEnv.put("PATH", path);
+            processEnv.put("TMPDIR", TermuxConstants.TERMUX_TMP_PREFIX_DIR_PATH);
+        }
+        processEnv.put("TERM", "xterm-256color");
+        processEnv.put("LANG", "en_US.UTF-8");
+        processEnv.put("COLORTERM", "truecolor");
+        processEnv.remove("LD_PRELOAD");
+        processEnv.remove("LD_LIBRARY_PATH");
+    }
+
     private String runGitHub(String[] args) {
         try {
-            Process p = Runtime.getRuntime().exec(buildGh(args));
-            java.io.BufferedReader r = new java.io.BufferedReader(new java.io.InputStreamReader(p.getInputStream()));
-            StringBuilder sb = new StringBuilder();
-            String line;
-            while ((line = r.readLine()) != null) sb.append(line).append('\n');
-            java.io.BufferedReader e = new java.io.BufferedReader(new java.io.InputStreamReader(p.getErrorStream()));
-            while ((line = e.readLine()) != null) sb.append(line).append('\n');
-            p.waitFor();
-            return sb.toString();
+            ProcessBuilder builder = new ProcessBuilder(buildGh(args));
+            applyTermuxEnv(builder);
+            builder.directory(new File(TermuxConstants.TERMUX_HOME_DIR_PATH));
+            builder.redirectErrorStream(true);
+
+            final Process process = builder.start();
+            final StringBuilder output = new StringBuilder();
+
+            Thread reader = new Thread(() -> {
+                try (BufferedReader in = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
+                    String line;
+                    while ((line = in.readLine()) != null) {
+                        synchronized (output) {
+                            output.append(line).append('\n');
+                        }
+                    }
+                } catch (Exception ignored) {
+                }
+            }, "opencode-gh-runner-reader");
+            reader.setDaemon(true);
+            reader.start();
+
+            long deadline = SystemClock.uptimeMillis() + 180000L;
+            while (true) {
+                try {
+                    process.exitValue();
+                    break;
+                } catch (IllegalThreadStateException e) {
+                    if (SystemClock.uptimeMillis() > deadline) {
+                        process.destroy();
+                        break;
+                    }
+                    try {
+                        Thread.sleep(50L);
+                    } catch (InterruptedException interrupted) {
+                        Thread.currentThread().interrupt();
+                        process.destroy();
+                        break;
+                    }
+                }
+            }
+
+            reader.join(1000L);
+            synchronized (output) {
+                return output.toString();
+            }
         } catch (Exception ex) {
             return ex.toString();
         }
     }
 
     private String[] buildGh(String[] args) {
-        String prefix = com.termux.shared.termux.TermuxConstants.TERMUX_PREFIX_DIR_PATH;
+        String prefix = TermuxConstants.TERMUX_PREFIX_DIR_PATH;
         String gh = prefix + "/bin/gh";
         java.io.File f = new java.io.File(gh);
         if (f.exists()) {

@@ -266,14 +266,20 @@
     <string name="opencode_settings">Settings</string>
     <string name="opencode_extensions">Extensions</string>
     <string name="opencode_extension_github">GitHub</string>
-    <string name="opencode_github_not_logged_in">Not logged in to GitHub</string>
-    <string name="opencode_github_login">Login with GitHub</string>
-    <string name="opencode_github_logout">Logout</string>
+    <string name="opencode_github_not_logged_in">Chưa đăng nhập GitHub</string>
+    <string name="opencode_github_login">Đăng nhập GitHub</string>
+    <string name="opencode_github_logout">Đăng xuất</string>
     <string name="opencode_github_clone">Clone repository</string>
-    <string name="opencode_github_repos">Repositories</string>
-    <string name="opencode_github_installing">Installing gh and git…</string>
-    <string name="opencode_github_login_instructions">Open this link in your browser to login:</string>
-    <string name="opencode_github_logged_in">Logged in</string>
+    <string name="opencode_github_repos">Kho lưu trữ</string>
+    <string name="opencode_github_installing">Đang cài đặt git, gh theo yêu cầu pkg…</string>
+    <string name="opencode_github_login_instructions">Mở link này trên trình duyệt để đăng nhập:</string>
+    <string name="opencode_github_logged_in">Đã đăng nhập GitHub</string>
+    <string name="opencode_github_waiting_pkg">Đang chạy: pkg install -y git gh</string>
+    <string name="opencode_github_checking">Đang kiểm tra phiên đăng nhập gh auth status…</string>
+    <string name="opencode_github_auth_start">Đang khởi động gh auth login (device/web)…</string>
+    <string name="opencode_github_open_browser">Đang mở trình duyệt để xác thực…</string>
+    <string name="opencode_github_wait_auth">Đang chờ bạn hoàn tất đăng nhập trong trình duyệt (có thể mất vài phút)…</string>
+    <string name="opencode_github_done">Hoàn tất. Đang đồng bộ trạng thái…</string>
     <string name="close">Close</string>
 
 </resources>

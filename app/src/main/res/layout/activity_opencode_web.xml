@@ -157,40 +157,54 @@
                     android:id="@+id/opencode_github_status"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="@string/opencode_github_not_logged_in" />
+                    android:layout_marginTop="4dp"
+                    android:lineSpacingExtra="2dp"
+                    android:text="@string/opencode_github_not_logged_in"
+                    android:textIsSelectable="true" />
 
                 <TextView
                     android:id="@+id/opencode_github_login_link"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
                     android:autoLink="web"
                     android:textColor="?android:attr/colorAccent"
+                    android:textIsSelectable="true"
                     android:visibility="gone" />
 
-                <Button
-                    android:id="@+id/opencode_github_login_button"
-                    android:layout_width="wrap_content"
+                <LinearLayout
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="@string/opencode_github_login" />
+                    android:layout_marginTop="4dp"
+                    android:orientation="horizontal">
 
-                <Button
-                    android:id="@+id/opencode_github_logout_button"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="@string/opencode_github_logout"
-                    android:visibility="gone" />
+                    <Button
+                        android:id="@+id/opencode_github_login_button"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/opencode_github_login" />
+
+                    <Button
+                        android:id="@+id/opencode_github_logout_button"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/opencode_github_logout"
+                        android:visibility="gone" />
+
+                    <Button
+                        android:id="@+id/opencode_github_clone_button"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/opencode_github_clone"
+                        android:visibility="gone" />
+                </LinearLayout>
 
                 <TextView
                     android:id="@+id/opencode_github_user"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:visibility="gone" />
-
-                <Button
-                    android:id="@+id/opencode_github_clone_button"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="@string/opencode_github_clone"
+                    android:layout_marginTop="4dp"
+                    android:textStyle="bold"
                     android:visibility="gone" />
 
                 <TextView
@@ -205,6 +219,7 @@
                     android:id="@+id/opencode_github_repos_list"
                     android:layout_width="match_parent"
                     android:layout_height="200dp"
+                    android:layout_marginTop="4dp"
                     android:visibility="gone" />
             </LinearLayout>
         </LinearLayout>
