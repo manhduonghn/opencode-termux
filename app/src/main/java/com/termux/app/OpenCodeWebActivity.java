@@ -744,10 +744,10 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
 
     private String extractGhLink(String s) {
         if (s == null) return null;
-        java.util.regex.Matcher m = java.util.regex.Pattern.compile("(https?://github\\.com/login/device[^\\s]+)").matcher(s);
-        if (m.find()) return m.group(1);
-        m = java.util.regex.Pattern.compile("(https?://\\S+)").matcher(s);
-        if (m.find()) return m.group(1);
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("https?://github\\.com/login/device[^\\s]+").matcher(s);
+        if (m.find()) return m.group();
+        m = java.util.regex.Pattern.compile("https?://\\S+").matcher(s);
+        if (m.find()) return m.group();
         return null;
     }
 
