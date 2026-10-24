@@ -843,10 +843,10 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
         java.util.regex.Pattern p = java.util.regex.Pattern.compile("https?://github\\.com/login/device\\S+");
         java.util.regex.Matcher m = p.matcher(s);
         if (m.find()) return m.group();
-        p = java.util.regex.Pattern.compile("https?://github\\.com/[^\\s]*device[^\\s]*");
+        p = java.util.regex.Pattern.compile("https?://github\\.com[^\\s]*device[^\\s]*");
         m = p.matcher(s);
         if (m.find()) return m.group();
-        p = java.util.regex.Pattern.compile("https?://\\S+");
+        p = java.util.regex.Pattern.compile("https?://[^\\s]+");
         m = p.matcher(s);
         if (m.find()) return m.group();
         return null;
@@ -857,9 +857,12 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
         java.util.regex.Pattern p = java.util.regex.Pattern.compile("([A-Z0-9]{4}-[A-Z0-9]{4})");
         java.util.regex.Matcher m = p.matcher(s);
         if (m.find()) return m.group(1);
-        p = java.util.regex.Pattern.compile("code[:\\s]+([A-Z0-9]{8})", java.util.regex.Pattern.CASE_INSENSITIVE);
+        p = java.util.regex.Pattern.compile("([A-Z0-9]{8})");
         m = p.matcher(s);
-        if (m.find()) return m.group(1);
+        if (m.find()) {
+            String c = m.group(1);
+            if (c != null && c.length() == 8) return c;
+        }
         return null;
     }
 
