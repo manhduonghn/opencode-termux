@@ -73,6 +73,7 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
     private ProgressBar mGitHubProgress;
     private Button mGitHubCopyButton;
     private TextView mGitHubCodeView;
+    private TextView mGitHubChip;
     private TextView mStatusText;
     private Button mRetryButton;
     private String mGitHubCode;
@@ -625,8 +626,9 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
     }
 
     private void configureGitHubSettings() {
-        android.widget.CheckBox githubCheck = findViewById(R.id.opencode_extension_github);
-        android.view.View githubPanel = findViewById(R.id.opencode_github_panel);
+        final android.widget.CompoundButton githubCheck = findViewById(R.id.opencode_extension_github);
+        final android.view.View githubRow = findViewById(R.id.opencode_github_row);
+        final android.view.View githubPanel = findViewById(R.id.opencode_github_panel);
         final android.widget.TextView status = findViewById(R.id.opencode_github_status);
         final android.widget.TextView installStatus = findViewById(R.id.opencode_github_install_status);
         final android.widget.Button installBtn = findViewById(R.id.opencode_github_install_button);
@@ -640,6 +642,7 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
         final EditText cloneUrl = findViewById(R.id.opencode_github_clone_url);
         final android.widget.Button cloneBtn = findViewById(R.id.opencode_github_clone_button);
         mGitHubProgress = findViewById(R.id.opencode_github_progress);
+        mGitHubChip = findViewById(R.id.opencode_github_chip);
         mGitHubCodeView = findViewById(R.id.opencode_github_code);
         mGitHubCopyButton = findViewById(R.id.opencode_github_copy_button);
         if (mGitHubCopyButton != null) {
@@ -654,6 +657,15 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
                         android.widget.Toast.makeText(OpenCodeWebActivity.this,
                             "Đã sao chép mã " + mGitHubCode, android.widget.Toast.LENGTH_SHORT).show();
                     }
+                }
+            });
+        }
+
+        if (githubRow != null && githubCheck != null) {
+            githubRow.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    githubCheck.setChecked(!githubCheck.isChecked());
                 }
             });
         }
@@ -720,6 +732,12 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
                     if (repo != null) repo = repo.trim();
                     if (repo == null || repo.length() == 0) return;
                     final String r = repo;
+                    setGitHubBusy(true);
+                    if (installStatus != null) {
+                        installStatus.setVisibility(View.VISIBLE);
+                        installStatus.setText("Đang chuẩn bị clone...");
+                    }
+                    if (status != null) status.setText("Đang clone repository...");
                     new Thread(new Runnable() {
                         @Override
                         public void run() {
@@ -729,12 +747,57 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
                                 if (!url.endsWith(".git")) url = url + ".git";
                             }
                             final String cmd = "git clone " + shellQuote(url);
-                            runShell(cmd, 300000L);
                             runOnUiThread(new Runnable() {
                                 @Override
                                 public void run() {
+                                    if (installStatus != null) {
+                                        installStatus.setVisibility(View.VISIBLE);
+                                        installStatus.setText("Đang chạy:\n" + cmd);
+                                    }
+                                }
+                            });
+                            final StringBuilder liveLog = new StringBuilder();
+                            final long[] lastUiUpdate = new long[]{0L};
+                            String out = runShellStreaming(cmd, 900000L, new StreamListener() {
+                                @Override
+                                public void onLine(String line) {
+                                    synchronized (liveLog) {
+                                        liveLog.append(line).append('\n');
+                                    }
+                                    long now = SystemClock.uptimeMillis();
+                                    if (now - lastUiUpdate[0] < 200L) return;
+                                    lastUiUpdate[0] = now;
+                                    final String tail = tailOf(liveLog.toString(), 500);
+                                    runOnUiThread(new Runnable() {
+                                        @Override
+                                        public void run() {
+                                            if (installStatus != null) {
+                                                installStatus.setVisibility(View.VISIBLE);
+                                                installStatus.setText("git clone\n" + tail);
+                                            }
+                                        }
+                                    });
+                                }
+                            });
+                            setGitHubBusy(false);
+                            final String trimmed = out == null ? "" : out.trim();
+                            final boolean ok = !trimmed.toLowerCase().contains("fatal:")
+                                && !trimmed.toLowerCase().contains("error:");
+                            runOnUiThread(new Runnable() {
+                                @Override
+                                public void run() {
+                                    if (installStatus != null) {
+                                        String shown = trimmed;
+                                        if (shown.length() > 600) shown = shown.substring(0, 600) + "...";
+                                        installStatus.setText("git clone\n" + (shown.isEmpty() ? "(không có output)" : shown));
+                                        installStatus.setVisibility(View.VISIBLE);
+                                    }
+                                    if (status != null) {
+                                        status.setText(ok ? "Clone hoàn tất" : "Clone thất bại, xem log bên dưới");
+                                    }
                                     android.widget.Toast.makeText(OpenCodeWebActivity.this,
-                                        "Đã chạy: " + cmd, android.widget.Toast.LENGTH_LONG).show();
+                                        ok ? "Clone hoàn tất" : "Clone thất bại",
+                                        android.widget.Toast.LENGTH_LONG).show();
                                 }
                             });
                         }
@@ -742,6 +805,22 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
                 }
             });
         }
+    }
+
+    private void setGitHubChip(final String text, final boolean connected) {
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                if (mGitHubChip == null) return;
+                mGitHubChip.setText(text);
+                android.content.res.ColorStateList background = android.content.res.ColorStateList.valueOf(
+                    ContextCompat.getColor(OpenCodeWebActivity.this,
+                        connected ? R.color.github_chip_ok_bg : R.color.github_chip_off_bg));
+                mGitHubChip.setBackgroundTintList(background);
+                mGitHubChip.setTextColor(ContextCompat.getColor(OpenCodeWebActivity.this,
+                    connected ? R.color.github_accent : R.color.github_muted));
+            }
+        });
     }
 
     private void showGitHubCode(final String code) {
@@ -770,6 +849,12 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
                 }
             }
         });
+    }
+
+    private static String tailOf(String text, int maxChars) {
+        if (text == null) return "";
+        if (text.length() <= maxChars) return text;
+        return "..." + text.substring(text.length() - maxChars);
     }
 
     private String shellQuote(String s) {
@@ -817,6 +902,7 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
                 if (installBtn != null) installBtn.setVisibility(View.GONE);
                 if (loginBtn != null) { loginBtn.setVisibility(View.VISIBLE); loginBtn.setEnabled(true); loginBtn.setText("Đăng nhập GitHub"); }
                 if (logoutBtn != null) { logoutBtn.setVisibility(View.GONE); }
+                setGitHubChip("Đang kiểm tra", false);
             }
         });
         new Thread(new Runnable() {
@@ -849,7 +935,8 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
                             installStatus.setVisibility(View.VISIBLE);
                         }
                         if (!gitOkF || !ghOkF) {
-                            status.setText("Chưa cài git/gh. Bấm 'Cài đặt git & gh'");
+                            status.setText("Chưa có git/gh trong Termux. Cài đặt để bắt đầu.");
+                            setGitHubChip("Chưa cài đặt", false);
                             if (installBtn != null) { installBtn.setVisibility(View.VISIBLE); installBtn.setEnabled(true); installBtn.setText("Cài đặt git & gh"); }
                             if (loginBtn != null) { loginBtn.setVisibility(View.VISIBLE); loginBtn.setEnabled(true); loginBtn.setText("Đăng nhập GitHub"); }
                             if (logoutBtn != null) { logoutBtn.setVisibility(View.GONE); }
@@ -857,12 +944,14 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
                         }
                         if (installBtn != null) { installBtn.setVisibility(View.GONE); }
                         if (!loggedInF) {
-                            status.setText("Chưa đăng nhập GitHub. Bấm 'Đăng nhập GitHub'");
+                            status.setText("Chưa đăng nhập. Đăng nhập để clone cả repository riêng tư.");
+                            setGitHubChip("Chưa đăng nhập", false);
                             if (loginBtn != null) { loginBtn.setVisibility(View.VISIBLE); loginBtn.setEnabled(true); loginBtn.setText("Đăng nhập GitHub"); }
                             if (logoutBtn != null) { logoutBtn.setVisibility(View.GONE); }
                             return;
                         }
-                        status.setText("Đã đăng nhập GitHub");
+                        status.setText("Đã kết nối GitHub");
+                        setGitHubChip("Đã kết nối", true);
                         if (user != null && whoF != null) {
                             user.setText("Tài khoản: " + whoF);
                             user.setVisibility(View.VISIBLE);
@@ -884,12 +973,35 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
                 if (installBtn != null) { installBtn.setEnabled(false); installBtn.setText("Đang cài..."); }
                 if (installStatus != null) { installStatus.setVisibility(View.VISIBLE); installStatus.setText("Đang chạy: pkg install -y git gh"); }
                 status.setText("Đang cài đặt git và gh theo chuẩn Termux...");
+                setGitHubChip("Đang cài đặt", false);
             }
         });
         new Thread(new Runnable() {
             @Override
             public void run() {
-                String out = runShell("pkg install -y git gh 2>&1", 300000L);
+                final StringBuilder liveLog = new StringBuilder();
+                final long[] lastUiUpdate = new long[]{0L};
+                String out = runShellStreaming("pkg install -y git gh", 900000L, new StreamListener() {
+                    @Override
+                    public void onLine(String line) {
+                        synchronized (liveLog) {
+                            liveLog.append(line).append('\n');
+                        }
+                        long now = SystemClock.uptimeMillis();
+                        if (now - lastUiUpdate[0] < 200L) return;
+                        lastUiUpdate[0] = now;
+                        final String tail = tailOf(liveLog.toString(), 500);
+                        runOnUiThread(new Runnable() {
+                            @Override
+                            public void run() {
+                                if (installStatus != null) {
+                                    installStatus.setVisibility(View.VISIBLE);
+                                    installStatus.setText("pkg install -y git gh\n" + tail);
+                                }
+                            }
+                        });
+                    }
+                });
                 setGitHubBusy(false);
                 runOnUiThread(new Runnable() {
                     @Override
@@ -919,6 +1031,7 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
                 if (linkView != null) { linkView.setVisibility(View.GONE); linkView.setText(""); }
                 if (hintView != null) { hintView.setVisibility(View.GONE); hintView.setText(""); }
                 status.setText("Đang chạy: gh auth login -h github.com -p https --web -s repo,read:org");
+                setGitHubChip("Đang đăng nhập", false);
             }
         });
         new Thread(new Runnable() {
@@ -929,14 +1042,38 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
                         @Override
                         public void run() {
                             status.setText("Chưa có git/gh, đang cài đặt trước khi đăng nhập...");
+                            setGitHubChip("Đang cài đặt", false);
                         }
                     });
-                    runShell("pkg install -y git gh 2>&1", 300000L);
+                    final StringBuilder installLog = new StringBuilder();
+                    final long[] lastInstallUpdate = new long[]{0L};
+                    runShellStreaming("pkg install -y git gh", 900000L, new StreamListener() {
+                        @Override
+                        public void onLine(String line) {
+                            synchronized (installLog) {
+                                installLog.append(line).append('\n');
+                            }
+                            long now = SystemClock.uptimeMillis();
+                            if (now - lastInstallUpdate[0] < 200L) return;
+                            lastInstallUpdate[0] = now;
+                            final String tail = tailOf(installLog.toString(), 400);
+                            runOnUiThread(new Runnable() {
+                                @Override
+                                public void run() {
+                                    if (installStatus != null) {
+                                        installStatus.setVisibility(View.VISIBLE);
+                                        installStatus.setText("pkg install -y git gh\n" + tail);
+                                    }
+                                }
+                            });
+                        }
+                    });
                     if (!isGitInstalled() || !isGhInstalled()) {
                         runOnUiThread(new Runnable() {
                             @Override
                             public void run() {
                                 status.setText("Cài đặt git/gh thất bại. Hãy thử lại nút 'Cài đặt git & gh'.");
+                                setGitHubChip("Chưa cài đặt", false);
                                 if (loginBtn != null) { loginBtn.setEnabled(true); loginBtn.setText("Đăng nhập GitHub"); }
                                 if (installBtn != null) { installBtn.setVisibility(View.VISIBLE); installBtn.setEnabled(true); }
                                 setGitHubBusy(false);
@@ -955,6 +1092,18 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
                     new GhLineListener() {
                         @Override
                         public void onLine(String line, String outputSoFar, java.io.BufferedWriter stdin) {
+                            final String ghLine = line == null ? "" : line.trim();
+                            if (!ghLine.isEmpty()) {
+                                runOnUiThread(new Runnable() {
+                                    @Override
+                                    public void run() {
+                                        if (installStatus != null) {
+                                            installStatus.setVisibility(View.VISIBLE);
+                                            installStatus.setText("gh: " + ghLine);
+                                        }
+                                    }
+                                });
+                            }
                             String code = extractGhCode(outputSoFar);
                             if (code != null && !code.isEmpty() && !code.equals(shownCode[0])) {
                                 shownCode[0] = code;
@@ -967,6 +1116,7 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
                                             hintView.setVisibility(View.VISIBLE);
                                         }
                                         status.setText("Nhập mã " + shownCode[0] + " tại github.com/login/device");
+                                        setGitHubChip("Chờ xác thực", false);
                                     }
                                 });
                             }
@@ -1052,6 +1202,7 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
                         if (loginBtn != null) { loginBtn.setEnabled(true); loginBtn.setText("Đăng nhập lại"); }
                         if (success) {
                             status.setText("Đăng nhập thành công");
+                            setGitHubChip("Đã kết nối", true);
                             if (codeView != null) { codeView.setVisibility(View.GONE); codeView.setText(""); }
                             if (linkView != null) { linkView.setVisibility(View.GONE); linkView.setText(""); }
                             if (hintView != null) { hintView.setVisibility(View.GONE); hintView.setText(""); }
@@ -1059,6 +1210,7 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
                             syncNativeWithGitHub(status);
                         } else {
                             status.setText("Chưa hoàn tất đăng nhập. Nhập mã rồi bấm 'Đăng nhập lại' nếu cần.");
+                            setGitHubChip("Chưa đăng nhập", false);
                             if (hintView != null) hintView.setVisibility(View.VISIBLE);
                         }
                     }
@@ -1146,6 +1298,80 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
                 } catch (Exception ignored) {
                 }
             }, "opencode-gh-shell-reader");
+            reader.setDaemon(true);
+            reader.start();
+
+            long deadline = SystemClock.uptimeMillis() + timeoutMs;
+            while (true) {
+                try {
+                    process.exitValue();
+                    break;
+                } catch (IllegalThreadStateException e) {
+                    if (SystemClock.uptimeMillis() > deadline) {
+                        process.destroy();
+                        try {
+                            process.waitFor();
+                        } catch (Exception ignored) {
+                        }
+                        break;
+                    }
+                    try {
+                        Thread.sleep(50L);
+                    } catch (InterruptedException interrupted) {
+                        Thread.currentThread().interrupt();
+                        process.destroy();
+                        break;
+                    }
+                }
+            }
+
+            reader.join(1000L);
+            synchronized (output) {
+                return output.toString();
+            }
+        } catch (Exception ex) {
+            return ex.toString();
+        }
+    }
+
+    private interface StreamListener {
+        void onLine(String line);
+    }
+
+    /**
+     * Run a shell command and deliver each output line while it is still running, so long
+     * operations such as {@code pkg install} or {@code git clone} can show live progress.
+     */
+    private String runShellStreaming(String cmd, long timeoutMs, final StreamListener listener) {
+        try {
+            ProcessBuilder builder = new ProcessBuilder("sh", "-c", cmd);
+            applyTermuxEnv(builder);
+            builder.directory(new File(TermuxConstants.TERMUX_HOME_DIR_PATH));
+            builder.redirectErrorStream(true);
+
+            final Process process = builder.start();
+            final StringBuilder output = new StringBuilder();
+
+            Thread reader = new Thread(new Runnable() {
+                @Override
+                public void run() {
+                    try (BufferedReader in = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
+                        String line;
+                        while ((line = in.readLine()) != null) {
+                            synchronized (output) {
+                                output.append(line).append('\n');
+                            }
+                            if (listener != null) {
+                                try {
+                                    listener.onLine(line);
+                                } catch (Exception ignored) {
+                                }
+                            }
+                        }
+                    } catch (Exception ignored) {
+                    }
+                }
+            }, "opencode-gh-stream-reader");
             reader.setDaemon(true);
             reader.start();
 

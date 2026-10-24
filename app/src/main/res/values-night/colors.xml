@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="github_accent">#FF2EA043</color>
+    <color name="github_surface">#FF161B22</color>
+    <color name="github_surface_stroke">#33FFFFFF</color>
+    <color name="github_muted">#FF8B949E</color>
+    <color name="github_chip_off_bg">#1FFFFFFF</color>
+    <color name="github_chip_ok_bg">#332EA043</color>
+    <color name="github_code_bg">#FF0D1117</color>
+    <color name="github_input_bg">#FF0D1117</color>
+    <color name="github_error">#FFFF7B72</color>
+</resources>

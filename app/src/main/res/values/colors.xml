@@ -1,3 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- GitHub extension surfaces. The dark variants live in values-night. -->
+    <color name="github_accent">#FF238636</color>
+    <color name="github_surface">#FFF6F8FA</color>
+    <color name="github_surface_stroke">#1F000000</color>
+    <color name="github_muted">#FF57606A</color>
+    <color name="github_chip_off_bg">#14000000</color>
+    <color name="github_chip_ok_bg">#1F238636</color>
+    <color name="github_code_bg">#FFF0F3F6</color>
+    <color name="github_input_bg">#FFFFFFFF</color>
+    <color name="github_error">#FFCF222E</color>
 </resources>
