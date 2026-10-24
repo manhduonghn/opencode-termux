@@ -1619,12 +1619,6 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
     }
 
     @Override
-    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        // Nothing to forward: the notification permission is requested by the activity itself.
-    }
-
-    @Override
     protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
         if (requestCode == REQUEST_FILE_CHOOSER) {
             if (mFilePathCallback == null) return;
