@@ -154,6 +154,13 @@
                 android:visibility="gone">
 
                 <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:text="Tiện ích GitHub (theo chuẩn Termux)"
+                    android:textStyle="bold" />
+
+                <TextView
                     android:id="@+id/opencode_github_status"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
@@ -163,26 +170,34 @@
                     android:textIsSelectable="true" />
 
                 <TextView
-                    android:id="@+id/opencode_github_login_link"
+                    android:id="@+id/opencode_github_detail"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="4dp"
-                    android:autoLink="web"
-                    android:textColor="?android:attr/colorAccent"
+                    android:layout_marginTop="2dp"
+                    android:lineSpacingExtra="1dp"
+                    android:textSize="12sp"
                     android:textIsSelectable="true"
                     android:visibility="gone" />
 
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="4dp"
-                    android:orientation="horizontal">
+                    android:layout_marginTop="6dp"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical">
+
+                    <Button
+                        android:id="@+id/opencode_github_install_button"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Cài đặt git &amp; gh" />
 
                     <Button
                         android:id="@+id/opencode_github_login_button"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="@string/opencode_github_login" />
+                        android:text="@string/opencode_github_login"
+                        android:visibility="gone" />
 
                     <Button
                         android:id="@+id/opencode_github_logout_button"
@@ -205,6 +220,16 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="4dp"
                     android:textStyle="bold"
+                    android:visibility="gone" />
+
+                <TextView
+                    android:id="@+id/opencode_github_login_link"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:autoLink="web"
+                    android:textColor="?android:attr/colorAccent"
+                    android:textIsSelectable="true"
                     android:visibility="gone" />
 
                 <TextView
