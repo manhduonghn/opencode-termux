@@ -714,7 +714,7 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
                     });
                     return;
                 }
-                String loginOut = runShell("printf 'y\\n' | GH_HOST=github.com timeout 300 gh auth login -h github.com -p https --web --scopes repo,read:org,workflow 2>&1");
+                String loginOut = runShell("printf 'y\\n' | GH_HOST=github.com timeout 600 gh auth login -h github.com -p https --web --scopes repo,read:org,workflow 2>&1");
                 final String link = extractGhLink(loginOut);
                 final String code = extractGhCode(loginOut);
                 runOnUiThread(new Runnable() {
