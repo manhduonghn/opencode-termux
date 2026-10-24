@@ -562,23 +562,26 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
 
             final String url = pairUrl;
             final String message = error;
-            runOnUiThread(() -> {
-                if (isFinishing() || isDestroyed()) return;
-                // A newer load was started (reload button, stop detected, ...) while this one was
-                // waiting for the service. Do not let the stale result win.
-                if (generation != mLoadGeneration) return;
-                if (mWebView == null) return;
+            runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    if (isFinishing() || isDestroyed()) return;
+                    // A newer load was started (reload button, stop detected, ...) while this one was
+                    // waiting for the service. Do not let the stale result win.
+                    if (generation != mLoadGeneration) return;
+                    if (mWebView == null) return;
 
-                if (url != null) {
-                    // The server only answers the one time pair link with the session cookie
-                    // redirect when the request looks like a browser navigation. WebView sends
-                    // this by default, but be explicit so the pair link can never return JSON.
-                    HashMap<String, String> headers = new HashMap<String, String>();
-                    headers.put("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8");
-                    mWebView.loadUrl(url, headers);
-                } else {
-                    mWebUiStarted = false;
-                    showError(message);
+                    if (url != null) {
+                        // The server only answers the one time pair link with the session cookie
+                        // redirect when the request looks like a browser navigation. WebView sends
+                        // this by default, but be explicit so the pair link can never return JSON.
+                        HashMap<String, String> headers = new HashMap<String, String>();
+                        headers.put("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8");
+                        mWebView.loadUrl(url, headers);
+                    } else {
+                        mWebUiStarted = false;
+                        showError(message);
+                    }
                 }
             });
         }, "opencode-web-start").start();
@@ -611,13 +614,13 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
     private void configureGitHubSettings() {
         android.widget.CheckBox githubCheck = findViewById(R.id.opencode_extension_github);
         android.view.View githubPanel = findViewById(R.id.opencode_github_panel);
-        android.widget.TextView status = findViewById(R.id.opencode_github_status);
-        android.widget.TextView loginLink = findViewById(R.id.opencode_github_login_link);
-        android.widget.Button loginBtn = findViewById(R.id.opencode_github_login_button);
-        android.widget.Button logoutBtn = findViewById(R.id.opencode_github_logout_button);
-        android.widget.TextView user = findViewById(R.id.opencode_github_user);
-        android.widget.Button cloneBtn = findViewById(R.id.opencode_github_clone_button);
-        ListView reposList = findViewById(R.id.opencode_github_repos_list);
+        final android.widget.TextView status = findViewById(R.id.opencode_github_status);
+        final android.widget.TextView loginLink = findViewById(R.id.opencode_github_login_link);
+        final android.widget.Button loginBtn = findViewById(R.id.opencode_github_login_button);
+        final android.widget.Button logoutBtn = findViewById(R.id.opencode_github_logout_button);
+        final android.widget.TextView user = findViewById(R.id.opencode_github_user);
+        final android.widget.Button cloneBtn = findViewById(R.id.opencode_github_clone_button);
+        final ListView reposList = findViewById(R.id.opencode_github_repos_list);
 
         if (githubCheck != null && githubPanel != null) {
             githubCheck.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
@@ -644,8 +647,13 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
             logoutBtn.setOnClickListener(new View.OnClickListener() {
                 @Override
                 public void onClick(View v) {
-                    runGitHub(new String[]{"auth", "logout", "-h", "github.com", "-y"});
-                    refreshGitHubStatus(status, loginLink, loginBtn, logoutBtn, user, cloneBtn, reposList);
+                    runShell("gh auth logout -h github.com -y 2>&1");
+                    runOnUiThread(new Runnable() {
+                        @Override
+                        public void run() {
+                            refreshGitHubStatus(status, loginLink, loginBtn, logoutBtn, user, cloneBtn, reposList);
+                        }
+                    });
                 }
             });
         }
@@ -676,108 +684,157 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
         }
     }
 
-    private void ensureGitHubReady(android.widget.TextView status, android.widget.TextView loginLink, android.widget.Button loginBtn, android.widget.Button logoutBtn, android.widget.TextView user, android.widget.Button cloneBtn, ListView reposList) {
+    private void ensureGitHubReady(final android.widget.TextView status, final android.widget.TextView loginLink, final android.widget.Button loginBtn, final android.widget.Button logoutBtn, final android.widget.TextView user, final android.widget.Button cloneBtn, final ListView reposList) {
         status.setText(R.string.opencode_github_installing);
-        new Thread(() -> {
-            runShell("pkg install -y git gh 2>&1");
-            runOnUiThread(() -> startGitHubLogin(status, loginLink, loginBtn, logoutBtn, user, cloneBtn, reposList));
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                runShell("pkg install -y git gh 2>&1");
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        startGitHubLogin(status, loginLink, loginBtn, logoutBtn, user, cloneBtn, reposList);
+                    }
+                });
+            }
         }, "opencode-gh-install").start();
     }
 
-    private void startGitHubLogin(android.widget.TextView status, android.widget.TextView loginLink, android.widget.Button loginBtn, android.widget.Button logoutBtn, android.widget.TextView user, android.widget.Button cloneBtn, ListView reposList) {
-        new Thread(() -> {
-            String out = runShell("gh auth status 2>&1 | head -5");
-            if (out != null && out.contains("Logged in")) {
-                runOnUiThread(() -> refreshGitHubStatus(status, loginLink, loginBtn, logoutBtn, user, cloneBtn, reposList));
-                return;
-            }
-            String loginOut = runShell("printf 'y\n' | gh auth login -h github.com -p https --web -s repo,read:org 2>&1");
-            String link = extractGhLink(loginOut);
-            runOnUiThread(() -> {
-                if (link != null && !link.isEmpty()) {
-                    status.setText(R.string.opencode_github_login_instructions);
-                    loginLink.setText(link);
-                    loginLink.setVisibility(View.VISIBLE);
-                    try {
-                        startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(link)));
-                    } catch (Exception ignored) {}
-                    loginBtn.setVisibility(View.GONE);
-                    logoutBtn.setVisibility(View.GONE);
-                } else {
-                    status.setText(R.string.opencode_github_not_logged_in);
-                    loginBtn.setVisibility(View.VISIBLE);
+    private void startGitHubLogin(final android.widget.TextView status, final android.widget.TextView loginLink, final android.widget.Button loginBtn, final android.widget.Button logoutBtn, final android.widget.TextView user, final android.widget.Button cloneBtn, final ListView reposList) {
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                String out = runShell("gh auth status 2>&1");
+                if (out != null && out.indexOf("Logged in") >= 0) {
+                    runOnUiThread(new Runnable() {
+                        @Override
+                        public void run() {
+                            refreshGitHubStatus(status, loginLink, loginBtn, logoutBtn, user, cloneBtn, reposList);
+                        }
+                    });
+                    return;
                 }
-            });
-            for (int i = 0; i < 60; i++) {
-                try { Thread.sleep(2000); } catch (Exception ignored) {}
-                String out2 = runShell("gh auth status 2>&1 | head -3");
-                if (out2 != null && out2.contains("Logged in")) {
-                    runOnUiThread(() -> refreshGitHubStatus(status, loginLink, loginBtn, logoutBtn, user, cloneBtn, reposList));
-                    break;
+                String loginOut = runShell("printf 'y\\n' | gh auth login -h github.com -p https --web -s repo,read:org 2>&1");
+                final String link = extractGhLink(loginOut);
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        if (link != null && link.length() > 0) {
+                            status.setText(R.string.opencode_github_login_instructions);
+                            loginLink.setText(link);
+                            loginLink.setVisibility(View.VISIBLE);
+                            loginLink.setOnClickListener(new View.OnClickListener() {
+                                @Override
+                                public void onClick(View v) {
+                                    try {
+                                        startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(link)));
+                                    } catch (Exception ignored) {
+                                    }
+                                }
+                            });
+                            try {
+                                startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(link)));
+                            } catch (Exception ignored) {
+                            }
+                            loginBtn.setVisibility(View.GONE);
+                            logoutBtn.setVisibility(View.GONE);
+                        } else {
+                            status.setText(R.string.opencode_github_not_logged_in);
+                            loginBtn.setVisibility(View.VISIBLE);
+                            logoutBtn.setVisibility(View.GONE);
+                            loginLink.setVisibility(View.GONE);
+                        }
+                    }
+                });
+                for (int i = 0; i < 90; i++) {
+                    try {
+                        Thread.sleep(2000);
+                    } catch (Exception ignored) {
+                    }
+                    String out2 = runShell("gh auth status 2>&1");
+                    if (out2 != null && out2.indexOf("Logged in") >= 0) {
+                        runOnUiThread(new Runnable() {
+                            @Override
+                            public void run() {
+                                refreshGitHubStatus(status, loginLink, loginBtn, logoutBtn, user, cloneBtn, reposList);
+                            }
+                        });
+                        break;
+                    }
                 }
             }
         }, "opencode-gh-login").start();
     }
 
-    private void refreshGitHubStatus(android.widget.TextView status, android.widget.TextView loginLink, android.widget.Button loginBtn, android.widget.Button logoutBtn, android.widget.TextView user, android.widget.Button cloneBtn, ListView reposList) {
-        new Thread(() -> {
-            String who = runShell("gh api user -q .login 2>&1");
-            String repos = runShell("gh repo list --limit 20 --json nameWithOwner -q '.[].nameWithOwner' 2>&1");
-            runOnUiThread(() -> {
-                if (who != null && !who.isEmpty() && !who.contains("error")) {
-                    status.setText(R.string.opencode_github_logged_in);
-                    user.setText(who.trim());
-                    user.setVisibility(View.VISIBLE);
-                    loginLink.setVisibility(View.GONE);
-                    loginBtn.setVisibility(View.GONE);
-                    logoutBtn.setVisibility(View.VISIBLE);
-                    cloneBtn.setVisibility(View.VISIBLE);
-                    if (reposList != null) {
-                        reposList.setVisibility(View.VISIBLE);
-                        String[] items = repos == null || repos.trim().isEmpty() ? new String[]{} : repos.trim().split("\\n");
-                        final String[] repoItems = items;
-                        reposList.setAdapter(new ArrayAdapter(this, android.R.layout.simple_list_item_1, items));
-                        reposList.setOnItemClickListener(new android.widget.AdapterView.OnItemClickListener() {
-                            @Override
-                            public void onItemClick(android.widget.AdapterView<?> parent, android.view.View view, int position, long id) {
-                                if (repoItems == null || position < 0 || position >= repoItems.length) return;
-                                String repo = repoItems[position];
-                                if (repo == null) return;
-                                int slash = repo.indexOf('/');
-                                String name = slash >= 0 ? repo.substring(slash + 1) : repo;
-                                String home = com.termux.shared.termux.TermuxConstants.TERMUX_HOME_DIR_PATH;
-                                String path = home + "/" + name;
-                                Intent intent = new Intent(OpenCodeWebActivity.this, com.termux.app.TermuxActivity.class);
-                                intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
-                                try {
-                                    intent.putExtra("com.termux.RUN_COMMAND_PATH", path);
-                                    intent.putExtra("com.termux.app.extra.CD_PATH", path);
-                                    intent.putExtra("path", path);
-                                    intent.putExtra("cwd", path);
-                                    intent.setData(android.net.Uri.parse("file://" + path));
-                                } catch (Exception ignored) {
+    private void refreshGitHubStatus(final android.widget.TextView status, final android.widget.TextView loginLink, final android.widget.Button loginBtn, final android.widget.Button logoutBtn, final android.widget.TextView user, final android.widget.Button cloneBtn, final ListView reposList) {
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                String who = runShell("gh api user -q .login 2>&1");
+                String repos = runShell("gh repo list --limit 50 --json nameWithOwner -q '.[].nameWithOwner' 2>&1");
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        if (who != null && who.trim().length() > 0 && who.indexOf("error") < 0 && who.indexOf("not logged") < 0) {
+                            status.setText(R.string.opencode_github_logged_in);
+                            user.setText(who.trim());
+                            user.setVisibility(View.VISIBLE);
+                            loginLink.setVisibility(View.GONE);
+                            loginBtn.setVisibility(View.GONE);
+                            logoutBtn.setVisibility(View.VISIBLE);
+                            cloneBtn.setVisibility(View.VISIBLE);
+                            if (reposList != null) {
+                                reposList.setVisibility(View.VISIBLE);
+                                String[] items;
+                                if (repos == null || repos.trim().length() == 0) {
+                                    items = new String[0];
+                                } else {
+                                    items = repos.trim().split("\\n");
                                 }
-                                try {
-                                    startActivity(intent);
-                                } catch (Exception ignored) {
-                                }
+                                final String[] repoItems = items;
+                                reposList.setAdapter(new ArrayAdapter(OpenCodeWebActivity.this, android.R.layout.simple_list_item_1, items));
+                                reposList.setOnItemClickListener(new android.widget.AdapterView.OnItemClickListener() {
+                                    @Override
+                                    public void onItemClick(android.widget.AdapterView<?> parent, android.view.View view, int position, long id) {
+                                        if (repoItems == null || position < 0 || position >= repoItems.length) return;
+                                        String repo = repoItems[position];
+                                        if (repo == null) return;
+                                        int slash = repo.indexOf('/');
+                                        String name = slash >= 0 ? repo.substring(slash + 1) : repo;
+                                        String home = com.termux.shared.termux.TermuxConstants.TERMUX_HOME_DIR_PATH;
+                                        String path = home + "/" + name;
+                                        Intent intent = new Intent(OpenCodeWebActivity.this, com.termux.app.TermuxActivity.class);
+                                        intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+                                        try {
+                                            intent.putExtra("com.termux.RUN_COMMAND_PATH", path);
+                                            intent.putExtra("com.termux.app.extra.CD_PATH", path);
+                                            intent.putExtra("path", path);
+                                            intent.putExtra("cwd", path);
+                                        } catch (Exception ignored) {
+                                        }
+                                        try {
+                                            startActivity(intent);
+                                        } catch (Exception ignored) {
+                                        }
+                                    }
+                                });
                             }
-                        });
+                        } else {
+                            status.setText(R.string.opencode_github_not_logged_in);
+                            user.setVisibility(View.GONE);
+                            loginLink.setVisibility(View.GONE);
+                            loginBtn.setVisibility(View.VISIBLE);
+                            logoutBtn.setVisibility(View.GONE);
+                            cloneBtn.setVisibility(View.GONE);
+                            if (reposList != null) {
+                                reposList.setVisibility(View.GONE);
+                                reposList.setOnItemClickListener(null);
+                                reposList.setAdapter(null);
+                            }
+                        }
                     }
-                } else {
-                    status.setText(R.string.opencode_github_not_logged_in);
-                    user.setVisibility(View.GONE);
-                    loginLink.setVisibility(View.GONE);
-                    loginBtn.setVisibility(View.VISIBLE);
-                    logoutBtn.setVisibility(View.GONE);
-                    cloneBtn.setVisibility(View.GONE);
-                    if (reposList != null) {
-                        reposList.setVisibility(View.GONE);
-                        reposList.setOnItemClickListener(null);
-                        reposList.setAdapter(null);
-                    }
-                }
-            });
+                });
+            }
         }, "opencode-gh-refresh").start();
     }
 
