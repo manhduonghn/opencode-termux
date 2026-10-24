@@ -4,72 +4,110 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:orientation="vertical"
-    android:paddingStart="24dp"
-    android:paddingEnd="24dp"
-    android:paddingTop="8dp"
-    android:paddingBottom="4dp">
-
-    <TextView
-        android:id="@+id/opencode_install_title"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="@string/opencode_installing"
-        android:textSize="18sp"
-        android:textStyle="bold" />
-
-    <TextView
-        android:id="@+id/opencode_install_message"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="6dp"
-        android:textSize="14sp" />
-
-    <ProgressBar
-        android:id="@+id/opencode_install_progress"
-        style="?android:attr/progressBarStyleHorizontal"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="16dp"
-        android:max="100"
-        android:progress="0" />
+    android:paddingStart="22dp"
+    android:paddingEnd="22dp"
+    android:paddingTop="20dp"
+    android:paddingBottom="6dp">
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="6dp"
+        android:gravity="center_vertical"
         android:orientation="horizontal">
+
+        <ImageView
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:contentDescription="@string/opencode_installing"
+            android:src="@drawable/ic_opencode_mark" />
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="12dp"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/opencode_install_title"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/opencode_installing"
+                android:textColor="@color/app_text"
+                android:textSize="17sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/opencode_install_message"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:ellipsize="end"
+                android:maxLines="2"
+                android:textColor="@color/app_muted"
+                android:textSize="12sp" />
+        </LinearLayout>
 
         <TextView
             android:id="@+id/opencode_install_percent"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:background="@drawable/bg_app_pill"
+            android:minWidth="52dp"
+            android:gravity="center"
+            android:paddingStart="10dp"
+            android:paddingTop="5dp"
+            android:paddingEnd="10dp"
+            android:paddingBottom="5dp"
             android:text="0%"
-            android:textSize="24sp"
+            android:textColor="@color/app_accent"
+            android:textSize="13sp"
             android:textStyle="bold" />
+    </LinearLayout>
+
+    <ProgressBar
+        android:id="@+id/opencode_install_progress"
+        style="?android:attr/progressBarStyleHorizontal"
+        android:layout_width="match_parent"
+        android:layout_height="6dp"
+        android:layout_marginTop="18dp"
+        android:max="100"
+        android:progress="0"
+        android:progressDrawable="@drawable/bg_app_progress" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="10dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
 
         <TextView
-            android:id="@+id/opencode_install_bytes"
+            android:id="@+id/opencode_install_detail"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:layout_marginStart="12dp"
-            android:gravity="end|center_vertical"
-            android:textSize="13sp" />
+            android:textColor="@color/app_muted"
+            android:textSize="12sp" />
 
+        <TextView
+            android:id="@+id/opencode_install_bytes"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="10dp"
+            android:gravity="end"
+            android:textColor="@color/app_muted"
+            android:textSize="12sp" />
     </LinearLayout>
-
-    <TextView
-        android:id="@+id/opencode_install_detail"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="2dp"
-        android:textSize="12sp" />
 
     <TextView
         android:id="@+id/opencode_install_error"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="10dp"
+        android:layout_marginTop="12dp"
+        android:lineSpacingExtra="2dp"
+        android:textColor="@color/app_danger"
         android:textSize="13sp"
         android:textStyle="bold"
         android:visibility="gone" />
@@ -78,11 +116,13 @@
         android:id="@+id/opencode_install_steps"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="12dp"
-        android:background="@drawable/opencode_install_log_background"
+        android:layout_marginTop="14dp"
+        android:background="@drawable/bg_app_log"
         android:fontFamily="monospace"
         android:lineSpacingExtra="2dp"
-        android:padding="10dp"
+        android:maxLines="8"
+        android:padding="12dp"
+        android:textColor="@color/app_muted"
         android:textSize="11sp"
         android:typeface="monospace" />
 

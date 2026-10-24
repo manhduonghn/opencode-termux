@@ -26,11 +26,11 @@
 
 
     <!-- Termux Bootstrap Packages Installation -->
-    <string name="bootstrap_installer_body">Installing bootstrap packages…</string>
-    <string name="bootstrap_error_title">Unable to install bootstrap</string>
-    <string name="bootstrap_error_body">&TERMUX_APP_NAME; was unable to install the bootstrap packages.</string>
-    <string name="bootstrap_error_abort">Abort</string>
-    <string name="bootstrap_error_try_again">Try again</string>
+    <string name="bootstrap_installer_body">Đang cài gói bootstrap…</string>
+    <string name="bootstrap_error_title">Không thể cài bootstrap</string>
+    <string name="bootstrap_error_body">&TERMUX_APP_NAME; không thể cài các gói bootstrap.</string>
+    <string name="bootstrap_error_abort">Hủy</string>
+    <string name="bootstrap_error_try_again">Thử lại</string>
     <string name="bootstrap_error_not_primary_user_message">&TERMUX_APP_NAME; can only be run as the primary user.
         \nBootstrap binaries compiled for &TERMUX_APP_NAME; have hardcoded $PREFIX path and cannot be installed
         under any path other than:\n%1$s.</string>
@@ -238,16 +238,20 @@
 
 
     <!-- OpenCode -->
-    <string name="opencode_installing">Installing OpenCode…</string>
-    <string name="opencode_install_done_title">OpenCode is ready</string>
-    <string name="opencode_install_failed_title">OpenCode installation failed</string>
-    <string name="opencode_install_hide">Run in the background</string>
-    <string name="opencode_install_close">Close</string>
-    <string name="opencode_install_retry">Retry</string>
-    <string name="opencode_log_location">The details are in %1$s</string>
-    <string name="opencode_not_installed">OpenCode is not installed yet. It is being installed now…</string>
-    <string name="opencode_started">Starting OpenCode…</string>
-    <string name="opencode_ready">OpenCode %1$s is ready</string>
+    <string name="opencode_installing">Đang cài đặt OpenCode…</string>
+    <string name="opencode_install_done_title">OpenCode đã sẵn sàng</string>
+    <string name="opencode_install_failed_title">Cài đặt OpenCode thất bại</string>
+    <string name="opencode_install_hide">Chạy nền</string>
+    <string name="opencode_install_close">Đóng</string>
+    <string name="opencode_install_retry">Thử lại</string>
+    <string name="startup_progress_title">Đang thiết lập OpenCode</string>
+    <string name="startup_progress_subtitle">Bootstrap · Thư viện · OpenCode</string>
+    <string name="startup_progress_hint">Quá trình có thể mất vài phút. Bạn có thể để ứng dụng chạy nền, việc tải sẽ tiếp tục.</string>
+    <string name="startup_progress_log_empty">Đang chuẩn bị…</string>
+    <string name="opencode_log_location">Chi tiết nằm trong %1$s</string>
+    <string name="opencode_not_installed">OpenCode chưa được cài. Đang cài đặt ngay…</string>
+    <string name="opencode_started">Đang khởi động OpenCode…</string>
+    <string name="opencode_ready">OpenCode %1$s đã sẵn sàng</string>
     <string name="opencode_prompt_hint">Ask OpenCode…</string>
     <string name="opencode_prompt_send">Send</string>
     <string name="send">Send</string>
@@ -257,15 +261,21 @@
     <string name="opencode_update_requested">Updating OpenCode, watch the notification…</string>
     <string name="action_open_web">Open Web UI</string>
     <string name="opencode_web_title">OpenCode Web</string>
+    <string name="opencode_web_brand">OpenCode</string>
+    <string name="opencode_web_brand_subtitle">Termux · Web UI</string>
+    <string name="opencode_web_brand_caption">AI coding agent</string>
+    <string name="opencode_web_first_run_hint">Lần đầu khởi động có thể mất vài phút để tải bootstrap, thư viện và OpenCode.</string>
     <string name="opencode_web_terminal">Terminal</string>
-    <string name="opencode_web_reload">Reload</string>
-    <string name="opencode_web_retry">Retry</string>
-    <string name="opencode_web_starting">Starting the OpenCode web UI…</string>
-    <string name="opencode_web_failed">Could not open the OpenCode web UI.</string>
-    <string name="opencode_web_http_error">The OpenCode server returned HTTP %1$d.</string>
-    <string name="opencode_settings">Settings</string>
-    <string name="opencode_extensions">Extensions</string>
+    <string name="opencode_web_reload">Tải lại</string>
+    <string name="opencode_web_retry">Thử lại</string>
+    <string name="opencode_web_starting">Đang khởi động giao diện web OpenCode…</string>
+    <string name="opencode_web_failed">Không thể mở giao diện web OpenCode.</string>
+    <string name="opencode_web_http_error">Máy chủ OpenCode trả về HTTP %1$d.</string>
+    <string name="opencode_settings">Cài đặt</string>
+    <string name="opencode_settings_subtitle">Cấu hình OpenCode và tiện ích</string>
+    <string name="opencode_extensions">Tiện ích mở rộng</string>
     <string name="opencode_extension_github">GitHub</string>
+    <string name="opencode_extension_github_desc">Git CLI, đăng nhập và clone repository</string>
     <string name="opencode_github_not_logged_in">Chưa đăng nhập GitHub</string>
     <string name="opencode_github_login">Đăng nhập GitHub</string>
     <string name="opencode_github_logout">Đăng xuất</string>

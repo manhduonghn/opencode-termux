@@ -10,4 +10,14 @@
     <color name="github_code_bg">#FFF0F3F6</color>
     <color name="github_input_bg">#FFFFFFFF</color>
     <color name="github_error">#FFCF222E</color>
+
+    <!-- Shared surfaces used by the main screen and the installer dialogs. -->
+    <color name="app_accent">#FF2563EB</color>
+    <color name="app_accent_soft">#1A2563EB</color>
+    <color name="app_surface">#FFFFFFFF</color>
+    <color name="app_surface_alt">#FFF3F4F6</color>
+    <color name="app_stroke">#1F000000</color>
+    <color name="app_muted">#FF6B7280</color>
+    <color name="app_text">#FF111827</color>
+    <color name="app_danger">#FFDC2626</color>
 </resources>

@@ -479,8 +479,8 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                         final boolean launchFailsafe = (intent != null && intent.getExtras() != null) &&
                             intent.getExtras().getBoolean(TERMUX_ACTIVITY.EXTRA_FAILSAFE_SESSION, false);
                         // The OpenCode runtime must be ready before the agent is started, it is
-                        // installed on the first run and repaired when it is broken. The default
-                        // bootstrap progress dialog stays visible for this whole setup.
+                        // installed on the first run and repaired when it is broken. The branded
+                        // startup dialog stays visible for this whole setup.
                         if (!TermuxInstaller.isStartupProgressShowing(this)
                             && (OpenCodeBootstrap.isInstallRunning() || !OpenCodeBootstrap.isRuntimeComplete()))
                             TermuxInstaller.showStartupProgress(TermuxActivity.this, getString(R.string.opencode_installing));
@@ -1090,18 +1090,20 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         if (state == null) return;
 
         // The user left the app while the first setup was still running and came back: bring
-        // back the same default Termux progress dialog instead of the custom one.
+        // back the same setup dialog instead of the custom one.
         if (TermuxInstaller.isStartupFlowActive()
             && (OpenCodeBootstrap.isInstallRunning() || state.running)) {
-            TermuxInstaller.showStartupProgress(this, state.message);
+            TermuxInstaller.showStartupProgress(this, state.message,
+                state.getOverallPercent(), state.detail);
         }
 
-        // The first run is still shown in the default bootstrap progress dialog, do not open the
-        // custom dialog on top of it when the activity is resumed. Only drop it when the setup
-        // has actually finished, an unknown state must keep the dialog visible.
+        // The first run is still shown in the startup progress dialog, do not open the custom
+        // dialog on top of it when the activity is resumed. Only drop it when the setup has
+        // actually finished, an unknown state must keep the dialog visible.
         if (TermuxInstaller.isStartupProgressShowing(this)) {
             if (state.running) {
-                TermuxInstaller.setStartupProgressMessage(this, state.message);
+                TermuxInstaller.setStartupProgress(this, state.message,
+                    state.getOverallPercent(), state.detail);
                 return;
             }
             if (!state.done && !state.failed) return;
@@ -1132,13 +1134,14 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         public void onOpenCodeInstallStateChanged(OpenCodeInstallState state) {
             if (state == null) return;
 
-            // On the first run the default Termux bootstrap progress dialog is still visible
-            // while glibc and OpenCode are installed. Update its message instead of opening the
-            // custom dialog, so the whole setup uses the same screen. The dialog is only dropped
-            // when the installation finished or failed, never in between.
+            // On the first run the branded startup dialog is still visible while glibc and the
+            // runtime are installed. Update its message instead of opening the custom dialog, so
+            // the whole setup uses the same screen. The dialog is only dropped when the
+            // installation finished or failed, never in between.
             if (TermuxInstaller.isStartupProgressShowing(TermuxActivity.this)) {
                 if (state.running) {
-                    TermuxInstaller.setStartupProgressMessage(TermuxActivity.this, state.message);
+                    TermuxInstaller.setStartupProgress(TermuxActivity.this, state.message,
+                        state.getOverallPercent(), state.detail);
                     return;
                 }
                 if (!state.done && !state.failed) return;

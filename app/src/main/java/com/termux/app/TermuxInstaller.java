@@ -1,15 +1,23 @@
 package com.termux.app;
 
 import android.app.Activity;
-import android.app.AlertDialog;
-import android.app.ProgressDialog;
+import android.app.Dialog;
 import android.content.Context;
+import android.graphics.Color;
+import android.graphics.drawable.ColorDrawable;
 import android.os.Build;
 import android.os.Environment;
 import android.system.Os;
+import android.util.DisplayMetrics;
 import android.util.Pair;
+import android.view.LayoutInflater;
+import android.view.View;
+import android.view.Window;
 import android.view.WindowManager;
+import android.widget.ProgressBar;
+import android.widget.TextView;
 
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.termux.R;
 import com.termux.shared.file.FileUtils;
 import com.termux.shared.termux.crash.TermuxCrashUtils;
@@ -44,9 +52,9 @@ import static com.termux.shared.termux.TermuxConstants.TERMUX_STAGING_PREFIX_DIR
  * (1) If $PREFIX already exist, assume that it is correct and be done. Note that this relies on that we do not create a
  * broken $PREFIX directory below.
  * <p/>
- * (2) The default Termux progress dialog is shown with the "Installing..." message and a
- *     spinner. It is kept visible while glibc and OpenCode are installed as well, and the caller
- *     dismisses it when the whole setup is finished.
+ * (2) The branded startup dialog is shown with the "Installing..." message and an indeterminate
+ *     progress bar. It is kept visible while glibc and OpenCode are installed as well, and the
+ *     caller dismisses it when the whole setup is finished.
  * <p/>
  * (3) A staging directory, $STAGING_PREFIX, is cleared if left over from broken installation below.
  * <p/>
@@ -63,14 +71,29 @@ final class TermuxInstaller {
 
     private static final String LOG_TAG = "TermuxInstaller";
 
-    /** The default Termux progress dialog, shown until the whole setup is finished. */
-    private static volatile ProgressDialog sProgressDialog;
+    /** The branded startup dialog, shown until the whole setup is finished. */
+    private static volatile Dialog sProgressDialog;
     /** The activity that owns {@link #sProgressDialog}. */
     private static volatile Activity sProgressActivity;
     /** True from the start of the first setup until the terminal is ready. */
     private static volatile boolean sStartupFlowActive = false;
     /** The last message shown in the startup progress dialog. */
     private static volatile String sProgressMessage;
+    /** The last detail line (speed, ETA, …) shown in the startup progress dialog. */
+    private static volatile String sProgressDetail;
+    /** The overall percentage, or a negative value while the progress is indeterminate. */
+    private static volatile int sProgressPercent = -1;
+    /** Messages shown in the console box of the dialog, newest last. */
+    private static final ArrayList<String> sProgressLog = new ArrayList<>();
+    /** Number of lines kept in the console box. */
+    private static final int MAX_PROGRESS_LOG_LINES = 6;
+
+    /** Views of {@link #sProgressDialog}, null while the dialog is not shown. */
+    private static volatile TextView sProgressMessageView;
+    private static volatile TextView sProgressDetailView;
+    private static volatile TextView sProgressPercentView;
+    private static volatile TextView sProgressLogView;
+    private static volatile ProgressBar sProgressBarView;
 
     /** Performs bootstrap setup if necessary. */
     static void setupBootstrapIfNeeded(final Activity activity, final Runnable whenDone) {
@@ -125,8 +148,8 @@ final class TermuxInstaller {
             Logger.logInfo(LOG_TAG, "The termux prefix directory \"" + TERMUX_PREFIX_DIR_PATH + "\" does not exist but another file exists at its destination.");
         }
 
-        // Show the default Termux progress dialog and keep it visible while the rest of the
-        // setup (glibc and OpenCode) runs, so the first start uses a single screen.
+        // Show the branded startup dialog and keep it visible while the rest of the setup
+        // (glibc and OpenCode) runs, so the first start uses a single screen.
         showStartupProgress(activity, activity.getString(R.string.bootstrap_installer_body));
 
         new Thread() {
@@ -253,7 +276,7 @@ final class TermuxInstaller {
         activity.runOnUiThread(() -> {
             dismissStartupProgress();
             try {
-                new AlertDialog.Builder(activity).setTitle(R.string.bootstrap_error_title).setMessage(R.string.bootstrap_error_body)
+                new MaterialAlertDialogBuilder(activity).setTitle(R.string.bootstrap_error_title).setMessage(R.string.bootstrap_error_body)
                     .setNegativeButton(R.string.bootstrap_error_abort, (dialog, which) -> {
                         dialog.dismiss();
                         activity.finish();
@@ -270,7 +293,7 @@ final class TermuxInstaller {
     }
 
     /**
-     * Show the default Termux progress dialog, or update its message when it is already shown.
+     * Show the branded startup dialog, or update its message when it is already shown.
      * The dialog is not cancelled when the bootstrap packages alone have been extracted: it is
      * kept visible while glibc and OpenCode are installed and is dismissed by
      * {@link #dismissStartupProgress()} when the whole setup is finished.
@@ -280,16 +303,31 @@ final class TermuxInstaller {
      * that belongs to the current activity.</p>
      */
     static void showStartupProgress(final Activity activity, final String message) {
+        showStartupProgress(activity, message, -1, null);
+    }
+
+    /**
+     * Show or update the startup dialog with a determinate percentage when the OpenCode
+     * installer reports one. A negative percentage makes the progress bar indeterminate, which
+     * is what the bootstrap extraction uses because it has no byte level progress.
+     */
+    static void showStartupProgress(final Activity activity, final String message,
+                                    final int percent, final String detail) {
         if (activity == null) return;
 
         sStartupFlowActive = true;
-        if (message != null)
+        if (message != null) {
             sProgressMessage = message;
+            addProgressLogLine(message);
+        }
+        sProgressDetail = detail;
+        sProgressPercent = percent;
 
-        ProgressDialog current = sProgressDialog;
+        Dialog current = sProgressDialog;
         if (current != null && sProgressActivity != activity) {
             // The activity that owned the dialog is gone, replace the stale dialog.
             sProgressDialog = null;
+            clearProgressViews();
             try {
                 current.dismiss();
             } catch (RuntimeException e) {
@@ -299,15 +337,50 @@ final class TermuxInstaller {
         }
 
         if (current != null && current.isShowing()) {
-            if (sProgressMessage != null)
-                current.setMessage(sProgressMessage);
+            updateProgressViews();
             return;
         }
 
-        final String shownMessage = sProgressMessage != null
-            ? sProgressMessage : activity.getString(R.string.bootstrap_installer_body);
         sProgressActivity = activity;
-        sProgressDialog = ProgressDialog.show(activity, null, shownMessage, true, false);
+        try {
+            Dialog dialog = new Dialog(activity);
+            dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+            View view = LayoutInflater.from(activity).inflate(R.layout.dialog_startup_progress, null, false);
+            sProgressMessageView = view.findViewById(R.id.startup_progress_message);
+            sProgressDetailView = view.findViewById(R.id.startup_progress_detail);
+            sProgressPercentView = view.findViewById(R.id.startup_progress_percent);
+            sProgressLogView = view.findViewById(R.id.startup_progress_log);
+            sProgressBarView = view.findViewById(R.id.startup_progress_bar);
+
+            dialog.setContentView(view);
+            dialog.setCancelable(false);
+            dialog.setCanceledOnTouchOutside(false);
+
+            Window window = dialog.getWindow();
+            if (window != null) {
+                window.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+                window.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);
+                WindowManager.LayoutParams params = window.getAttributes();
+                params.dimAmount = 0.45f;
+                window.setAttributes(params);
+            }
+
+            dialog.show();
+
+            if (window != null) {
+                DisplayMetrics metrics = activity.getResources().getDisplayMetrics();
+                int width = (int) (metrics.widthPixels * 0.90f);
+                int maxWidth = (int) (400 * metrics.density);
+                if (width > maxWidth) width = maxWidth;
+                window.setLayout(width, WindowManager.LayoutParams.WRAP_CONTENT);
+            }
+
+            sProgressDialog = dialog;
+            updateProgressViews();
+        } catch (RuntimeException e) {
+            Logger.logStackTraceWithMessage(LOG_TAG, "Could not show the startup progress dialog", e);
+            sProgressDialog = null;
+        }
     }
 
     /** @return true while a startup setup is running (even if the dialog is temporarily hidden). */
@@ -315,19 +388,91 @@ final class TermuxInstaller {
         return sStartupFlowActive;
     }
 
-    /** @return true while the default startup progress dialog of the given activity is visible. */
+    /** @return true while the startup progress dialog of the given activity is visible. */
     static boolean isStartupProgressShowing(final Activity activity) {
-        final ProgressDialog dialog = sProgressDialog;
+        final Dialog dialog = sProgressDialog;
         return dialog != null && dialog.isShowing() && sProgressActivity == activity;
     }
 
-    /** Update the message of the default startup progress dialog. */
+    /** Update the message of the startup progress dialog, keeping the current percentage. */
     static void setStartupProgressMessage(final Activity activity, final String message) {
-        if (message != null)
-            sProgressMessage = message;
-        final ProgressDialog dialog = sProgressDialog;
-        if (dialog == null || sProgressActivity != activity || message == null) return;
-        dialog.setMessage(message);
+        if (message != null) sProgressMessage = message;
+        final Dialog dialog = sProgressDialog;
+        if (dialog == null || sProgressActivity != activity || !dialog.isShowing() || message == null) return;
+        addProgressLogLine(message);
+        updateProgressViews();
+    }
+
+    /** Update the message, percentage and detail line of the startup progress dialog. */
+    static void setStartupProgress(final Activity activity, final String message,
+                                   final int percent, final String detail) {
+        if (activity == null) return;
+        if (message != null) sProgressMessage = message;
+        sProgressPercent = percent;
+        sProgressDetail = detail;
+        final Dialog dialog = sProgressDialog;
+        if (dialog == null || sProgressActivity != activity || !dialog.isShowing()) return;
+        addProgressLogLine(message);
+        updateProgressViews();
+    }
+
+    private static void updateProgressViews() {
+        if (sProgressMessageView != null) {
+            sProgressMessageView.setText(sProgressMessage != null ? sProgressMessage : "");
+        }
+        if (sProgressDetailView != null) {
+            boolean hasDetail = sProgressDetail != null && !sProgressDetail.trim().isEmpty();
+            sProgressDetailView.setText(hasDetail ? sProgressDetail : "");
+            sProgressDetailView.setVisibility(hasDetail ? View.VISIBLE : View.GONE);
+        }
+        if (sProgressBarView != null) {
+            if (sProgressPercent >= 0) {
+                sProgressBarView.setIndeterminate(false);
+                sProgressBarView.setProgress(sProgressPercent);
+            } else {
+                sProgressBarView.setIndeterminate(true);
+            }
+        }
+        if (sProgressPercentView != null) {
+            sProgressPercentView.setText(sProgressPercent >= 0 ? (sProgressPercent + "%") : "…");
+        }
+        if (sProgressLogView != null) {
+            sProgressLogView.setText(buildProgressLogText());
+        }
+    }
+
+    /** Keep the newest lines of the setup, so the dialog shows what is being downloaded. */
+    private static void addProgressLogLine(String line) {
+        if (line == null) return;
+        String trimmed = line.trim();
+        if (trimmed.isEmpty()) return;
+        synchronized (sProgressLog) {
+            if (!sProgressLog.isEmpty() && sProgressLog.get(sProgressLog.size() - 1).equals(trimmed))
+                return;
+            sProgressLog.add(trimmed);
+            while (sProgressLog.size() > MAX_PROGRESS_LOG_LINES)
+                sProgressLog.remove(0);
+        }
+    }
+
+    private static String buildProgressLogText() {
+        synchronized (sProgressLog) {
+            if (sProgressLog.isEmpty()) return "…";
+            StringBuilder sb = new StringBuilder();
+            for (String line : sProgressLog) {
+                if (sb.length() > 0) sb.append('\n');
+                sb.append("› ").append(line);
+            }
+            return sb.toString();
+        }
+    }
+
+    private static void clearProgressViews() {
+        sProgressMessageView = null;
+        sProgressDetailView = null;
+        sProgressPercentView = null;
+        sProgressLogView = null;
+        sProgressBarView = null;
     }
 
     /**
@@ -337,9 +482,10 @@ final class TermuxInstaller {
      */
     static void hideStartupProgress(final Activity activity) {
         if (activity == null || sProgressActivity != activity) return;
-        final ProgressDialog dialog = sProgressDialog;
+        final Dialog dialog = sProgressDialog;
         sProgressDialog = null;
         sProgressActivity = null;
+        clearProgressViews();
         if (dialog == null) return;
         try {
             dialog.dismiss();
@@ -349,15 +495,21 @@ final class TermuxInstaller {
     }
 
     /**
-     * Dismiss the default startup progress dialog. It is called when the whole setup is
+     * Dismiss the startup progress dialog. It is called when the whole setup is
      * finished (or failed), not when the bootstrap packages alone have been extracted.
      */
     static void dismissStartupProgress() {
         sStartupFlowActive = false;
         sProgressMessage = null;
+        sProgressDetail = null;
+        sProgressPercent = -1;
         sProgressActivity = null;
-        final ProgressDialog dialog = sProgressDialog;
+        final Dialog dialog = sProgressDialog;
         sProgressDialog = null;
+        clearProgressViews();
+        synchronized (sProgressLog) {
+            sProgressLog.clear();
+        }
         if (dialog == null) return;
         try {
             dialog.dismiss();

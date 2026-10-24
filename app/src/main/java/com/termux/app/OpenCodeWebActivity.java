@@ -240,8 +240,8 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
      * ========================================================================================== */
 
     /**
-     * Make sure that the Termux bootstrap and the OpenCode runtime are available. The default
-     * Termux progress dialog is shown for the whole setup. Once everything is ready the web UI
+     * Make sure that the Termux bootstrap and the OpenCode runtime are available. The branded
+     * startup dialog is shown for the whole setup. Once everything is ready the web UI
      * is loaded.
      */
     private void ensureRuntime() {
@@ -257,7 +257,9 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
                 OpenCodeInstallState state = OpenCodeBootstrap.getInstallState();
                 String message = state != null && !OpenCodeInstallState.isEmpty(state.message)
                     ? state.message : getString(R.string.opencode_installing);
-                TermuxInstaller.showStartupProgress(this, message);
+                int percent = state != null && state.running ? state.getOverallPercent() : -1;
+                String detail = state != null ? state.detail : null;
+                TermuxInstaller.showStartupProgress(this, message, percent, detail);
             }
             return;
         }
@@ -333,9 +335,11 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
 
             if (state.running) {
                 if (TermuxInstaller.isStartupProgressShowing(OpenCodeWebActivity.this)) {
-                    TermuxInstaller.setStartupProgressMessage(OpenCodeWebActivity.this, state.message);
+                    TermuxInstaller.setStartupProgress(OpenCodeWebActivity.this,
+                        state.message, state.getOverallPercent(), state.detail);
                 } else {
-                    TermuxInstaller.showStartupProgress(OpenCodeWebActivity.this, state.message);
+                    TermuxInstaller.showStartupProgress(OpenCodeWebActivity.this,
+                        state.message, state.getOverallPercent(), state.detail);
                 }
                 return;
             }

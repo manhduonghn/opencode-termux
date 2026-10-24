@@ -1,7 +1,6 @@
 package com.termux.app;
 
 import android.app.Activity;
-import android.app.AlertDialog;
 import android.content.DialogInterface;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -9,6 +8,9 @@ import android.widget.Button;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 
+import androidx.appcompat.app.AlertDialog;
+
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.termux.R;
 import com.termux.shared.logger.Logger;
 
@@ -78,7 +80,7 @@ public final class OpenCodeInstallDialog {
             errorView = view.findViewById(R.id.opencode_install_error);
             stepsView = view.findViewById(R.id.opencode_install_steps);
 
-            AlertDialog.Builder builder = new AlertDialog.Builder(activity);
+            MaterialAlertDialogBuilder builder = new MaterialAlertDialogBuilder(activity);
             builder.setView(view);
             builder.setCancelable(false);
             builder.setPositiveButton(R.string.opencode_install_hide, (d, which) -> {
