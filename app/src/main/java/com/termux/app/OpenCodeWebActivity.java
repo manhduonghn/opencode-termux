@@ -714,13 +714,18 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
                     });
                     return;
                 }
-                String loginOut = runShell("printf 'y\\n' | gh auth login -h github.com -p https --web -s repo,read:org 2>&1");
+                String loginOut = runShell("printf 'y\\n' | GH_HOST=github.com timeout 300 gh auth login -h github.com -p https --web --scopes repo,read:org,workflow 2>&1");
                 final String link = extractGhLink(loginOut);
+                final String code = extractGhCode(loginOut);
                 runOnUiThread(new Runnable() {
                     @Override
                     public void run() {
+                        String msg = getString(R.string.opencode_github_login_instructions);
+                        if (code != null && code.length() > 0) {
+                            msg = msg + "\n\nMã xác minh: " + code + "\n";
+                        }
+                        status.setText(msg);
                         if (link != null && link.length() > 0) {
-                            status.setText(R.string.opencode_github_login_instructions);
                             loginLink.setText(link);
                             loginLink.setVisibility(View.VISIBLE);
                             loginLink.setOnClickListener(new View.OnClickListener() {
@@ -736,14 +741,9 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
                                 startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(link)));
                             } catch (Exception ignored) {
                             }
-                            loginBtn.setVisibility(View.GONE);
-                            logoutBtn.setVisibility(View.GONE);
-                        } else {
-                            status.setText(R.string.opencode_github_not_logged_in);
-                            loginBtn.setVisibility(View.VISIBLE);
-                            logoutBtn.setVisibility(View.GONE);
-                            loginLink.setVisibility(View.GONE);
                         }
+                        loginBtn.setVisibility(View.GONE);
+                        logoutBtn.setVisibility(View.GONE);
                     }
                 });
                 for (int i = 0; i < 90; i++) {
@@ -843,9 +843,23 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
         java.util.regex.Pattern p = java.util.regex.Pattern.compile("https?://github\\.com/login/device\\S+");
         java.util.regex.Matcher m = p.matcher(s);
         if (m.find()) return m.group();
+        p = java.util.regex.Pattern.compile("https?://github\\.com/.*device.*");
+        m = p.matcher(s);
+        if (m.find()) return m.group();
         p = java.util.regex.Pattern.compile("https?://\\S+");
         m = p.matcher(s);
         if (m.find()) return m.group();
+        return null;
+    }
+
+    private String extractGhCode(String s) {
+        if (s == null) return null;
+        java.util.regex.Pattern p = java.util.regex.Pattern.compile("([A-Z0-9]{4}-[A-Z0-9]{4})");
+        java.util.regex.Matcher m = p.matcher(s);
+        if (m.find()) return m.group(1);
+        p = java.util.regex.Pattern.compile("code[:\\s]+([A-Z0-9]{8})", java.util.regex.Pattern.CASE_INSENSITIVE);
+        m = p.matcher(s);
+        if (m.find()) return m.group(1);
         return null;
     }
 
