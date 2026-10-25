@@ -161,6 +161,7 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
 
         configureGitHubSettings();
         configureUpdateCheck();
+        setupWakeLock();
 
         configureWebView();
         requestNotificationPermissionIfNeeded();
@@ -1779,6 +1780,48 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
         } catch (Exception ignored) {
         }
         return null;
+    }
+
+    private void setupWakeLock() {
+        androidx.appcompat.widget.SwitchCompat sw = findViewById(R.id.opencode_wakelock_switch);
+        TextView status = findViewById(R.id.opencode_wakelock_status);
+        if (sw == null) return;
+        android.content.SharedPreferences p = getSharedPreferences("opencode_cfg", Context.MODE_PRIVATE);
+        boolean on = p.getBoolean("wake_lock", false);
+        sw.setChecked(on);
+        updateWakeLockText(status, on);
+        sw.setOnCheckedChangeListener(new android.widget.CompoundButton.OnCheckedChangeListener() {
+            @Override
+            public void onCheckedChanged(android.widget.CompoundButton b, boolean checked) {
+                p.edit().putBoolean("wake_lock", checked).apply();
+                new Thread(() -> {
+                    try {
+                        String prefix = com.termux.shared.termux.TermuxConstants.TERMUX_PREFIX_DIR_PATH;
+                        String cmd = checked ? prefix + "/bin/termux-wake-lock" : prefix + "/bin/termux-wake-unlock";
+                        java.io.File f = new java.io.File(checked ? prefix + "/bin/termux-wake-lock" : prefix + "/bin/termux-wake-unlock");
+                        if (!f.exists()) {
+                            runOnUiThread(() -> {
+                                if (status != null) status.setText(R.string.opencode_battery_wakelock_missing);
+                                sw.setChecked(false);
+                                p.edit().putBoolean("wake_lock", false).apply();
+                            });
+                            return;
+                        }
+                        Runtime.getRuntime().exec(cmd).waitFor();
+                    } catch (Throwable t) {
+                        runOnUiThread(() -> {
+                            if (status != null) status.setText(R.string.opencode_battery_wakelock_missing);
+                        });
+                    }
+                    runOnUiThread(() -> updateWakeLockText(status, checked));
+                }).start();
+            }
+        });
+    }
+
+    private void updateWakeLockText(TextView status, boolean on) {
+        if (status == null) return;
+        status.setText(on ? R.string.opencode_battery_wakelock_on : R.string.opencode_battery_wakelock_off);
     }
 
     public static Intent newInstance(Context context) {
