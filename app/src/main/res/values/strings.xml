@@ -97,6 +97,23 @@
     <string name="permission_run_command_description">execute arbitrary commands within &TERMUX_APP_NAME;
         environment and access files</string>
 
+    <!-- OpenCode Updates -->
+    <string name="opencode_updates">Cập nhật</string>
+    <string name="opencode_updates_subtitle">Kiểm tra và cập nhật OpenCode</string>
+    <string name="opencode_updates_check">Kiểm tra cập nhật</string>
+    <string name="opencode_updates_checking">Đang kiểm tra...</string>
+    <string name="opencode_updates_current">Phiên bản hiện tại: %1$s</string>
+    <string name="opencode_updates_latest">Phiên bản mới nhất: %1$s</string>
+    <string name="opencode_updates_available">Có phiên bản mới: %1$s</string>
+    <string name="opencode_updates_uptodate">Đã cập nhật mới nhất</string>
+    <string name="opencode_updates_update_now">Cập nhật ngay</string>
+    <string name="opencode_updates_downloading">Đang tải xuống...</string>
+    <string name="opencode_updates_installing">Đang cài đặt...</string>
+    <string name="opencode_updates_auto">Tự động kiểm tra cập nhật</string>
+    <string name="opencode_updates_auto_desc">Kiểm tra khi mở ứng dụng</string>
+    <string name="opencode_updates_failed">Không thể kiểm tra cập nhật</string>
+    <string name="opencode_updates_network_error">Lỗi mạng</string>
+
     <!-- Termux Bootstrap Packages Installation -->
     <string name="bootstrap_installing">Đang cài đặt gói bootstrap Termux...</string>
     <string name="no_wait">Không chờ</string>

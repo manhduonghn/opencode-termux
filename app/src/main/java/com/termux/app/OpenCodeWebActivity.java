@@ -160,6 +160,7 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
         }
 
         configureGitHubSettings();
+        configureUpdateCheck();
 
         configureWebView();
         requestNotificationPermissionIfNeeded();
@@ -616,6 +617,7 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
             String error = null;
             String pairUrl = null;
             try {
+                OpenCodeForegroundService.start(getApplicationContext());
                 pairUrl = OpenCodeService.startAndPair(
                     getApplicationContext(), SERVICE_START_TIMEOUT_MS, CLI_TIMEOUT_MS);
             } catch (Exception e) {
@@ -1646,6 +1648,136 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
     private String quote(String a) {
         if (a == null) return "''";
         return "'" + a.replace("'", "'\\''") + "'";
+    }
+
+    private void configureUpdateCheck() {
+        TextView currentVersion = findViewById(R.id.opencode_updates_current_version);
+        TextView statusText = findViewById(R.id.opencode_updates_status);
+        Button checkButton = findViewById(R.id.opencode_updates_check_button);
+        Button updateButton = findViewById(R.id.opencode_updates_update_button);
+
+        String installed = OpenCodeBootstrap.getInstalledVersion();
+        if (currentVersion != null) {
+            if (installed == null || installed.isEmpty()) {
+                currentVersion.setText(getString(R.string.opencode_updates_current, "-"));
+            } else {
+                currentVersion.setText(getString(R.string.opencode_updates_current, installed));
+            }
+        }
+        if (statusText != null) {
+            statusText.setText("");
+        }
+        if (updateButton != null) {
+            updateButton.setVisibility(View.GONE);
+        }
+
+        if (checkButton != null) {
+            checkButton.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    checkForUpdates();
+                }
+            });
+        }
+        if (updateButton != null) {
+            updateButton.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    if (isFinishing() || isDestroyed()) return;
+                    OpenCodeBootstrap.requestUpdate(OpenCodeWebActivity.this);
+                    if (updateButton != null) updateButton.setVisibility(View.GONE);
+                    if (statusText != null) statusText.setText(R.string.opencode_updates_installing);
+                }
+            });
+        }
+    }
+
+    private void checkForUpdates() {
+        TextView currentVersion = findViewById(R.id.opencode_updates_current_version);
+        TextView statusText = findViewById(R.id.opencode_updates_status);
+        Button checkButton = findViewById(R.id.opencode_updates_check_button);
+        Button updateButton = findViewById(R.id.opencode_updates_update_button);
+
+        String installed = OpenCodeBootstrap.getInstalledVersion();
+        if (currentVersion != null) {
+            if (installed == null || installed.isEmpty()) {
+                currentVersion.setText(getString(R.string.opencode_updates_current, "-"));
+            } else {
+                currentVersion.setText(getString(R.string.opencode_updates_current, installed));
+            }
+        }
+        if (statusText != null) {
+            statusText.setText(R.string.opencode_updates_checking);
+        }
+        if (checkButton != null) {
+            checkButton.setEnabled(false);
+        }
+        if (updateButton != null) {
+            updateButton.setVisibility(View.GONE);
+        }
+
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                String latest = fetchLatestVersion();
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        if (checkButton != null) checkButton.setEnabled(true);
+                        if (latest == null || latest.isEmpty()) {
+                            if (statusText != null) {
+                                statusText.setText(R.string.opencode_updates_failed);
+                            }
+                            return;
+                        }
+                        if (installed != null && !installed.isEmpty() && installed.equals(latest)) {
+                            if (statusText != null) {
+                                statusText.setText(R.string.opencode_updates_uptodate);
+                            }
+                            return;
+                        }
+                        if (statusText != null) {
+                            statusText.setText(getString(R.string.opencode_updates_available, latest));
+                        }
+                        if (updateButton != null) {
+                            updateButton.setVisibility(View.VISIBLE);
+                        }
+                    }
+                });
+            }
+        }, "opencode-update-check").start();
+    }
+
+    private String fetchLatestVersion() {
+        try {
+            java.net.URL url = new java.net.URL("https://registry.npmjs.org/opencode-ai/latest");
+            java.net.HttpURLConnection conn = (java.net.HttpURLConnection) url.openConnection();
+            conn.setConnectTimeout(15000);
+            conn.setReadTimeout(15000);
+            conn.setRequestMethod("GET");
+            conn.setRequestProperty("User-Agent", "Termux-OpenCode");
+            int code = conn.getResponseCode();
+            if (code != 200) {
+                return null;
+            }
+            java.io.InputStream in = conn.getInputStream();
+            java.io.BufferedReader br = new java.io.BufferedReader(new java.io.InputStreamReader(in));
+            StringBuilder sb = new StringBuilder();
+            String line;
+            while ((line = br.readLine()) != null) {
+                sb.append(line);
+            }
+            br.close();
+            in.close();
+            String body = sb.toString();
+            java.util.regex.Pattern p = java.util.regex.Pattern.compile("\"version\"\\s*:\\s*\"([^\"]+)\"");
+            java.util.regex.Matcher m = p.matcher(body);
+            if (m.find()) {
+                return m.group(1);
+            }
+        } catch (Exception ignored) {
+        }
+        return null;
     }
 
     public static Intent newInstance(Context context) {
