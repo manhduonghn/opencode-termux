@@ -100,10 +100,13 @@
     <!-- Battery -->
     <string name="opencode_battery_title">Pin &amp; hiệu năng</string>
     <string name="opencode_battery_wakelock">Giữ CPU hoạt động</string>
-    <string name="opencode_battery_wakelock_desc">Dùng termux-wake-lock để tránh Android giới hạn khi màn hình tắt. Cần cài termux-api và app Termux:API.</string>
+    <string name="opencode_battery_wakelock_desc">Dùng termux-wake-lock để tránh Android giới hạn khi màn hình tắt</string>
+    <string name="opencode_battery_wakelock_install">Cài termux-api</string>
+    <string name="opencode_battery_wakelock_installing">Đang cài termux-api...</string>
+    <string name="opencode_battery_wakelock_installed">Đã cài. Bật để giữ CPU hoạt động</string>
     <string name="opencode_battery_wakelock_on">Đang bật</string>
     <string name="opencode_battery_wakelock_off">Đang tắt</string>
-    <string name="opencode_battery_wakelock_missing">Không tìm thấy termux-wake-lock. Chạy: pkg install termux-api</string>
+    <string name="opencode_battery_wakelock_missing">Cần cài termux-api (gói + app Termux:API)</string>
 
     <!-- OpenCode Updates -->
     <string name="opencode_updates">Cập nhật</string>

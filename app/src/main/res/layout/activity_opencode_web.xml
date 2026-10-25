@@ -339,6 +339,7 @@
                 android:textStyle="bold" />
 
             <LinearLayout
+                android:id="@+id/opencode_wakelock_row"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp"
@@ -369,11 +370,23 @@
                         android:textSize="12sp" />
                 </LinearLayout>
 
+                <Button
+                    android:id="@+id/opencode_wakelock_install_btn"
+                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:minHeight="40dp"
+                    android:text="@string/opencode_battery_wakelock_install"
+                    android:textAllCaps="false"
+                    android:textColor="@color/github_accent"
+                    app:strokeColor="@color/github_surface_stroke" />
+
                 <androidx.appcompat.widget.SwitchCompat
                     android:id="@+id/opencode_wakelock_switch"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginStart="8dp" />
+                    android:layout_marginStart="8dp"
+                    android:visibility="gone" />
             </LinearLayout>
 
             <TextView
@@ -383,6 +396,18 @@
                 android:layout_marginTop="6dp"
                 android:textColor="@color/github_muted"
                 android:textSize="12sp" />
+
+            <TextView
+                android:id="@+id/opencode_wakelock_install_status"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:ellipsize="end"
+                android:fontFamily="monospace"
+                android:maxLines="4"
+                android:textColor="@color/github_muted"
+                android:textSize="11sp"
+                android:visibility="gone" />
 
             <!-- Terminal moved to OpenCode web chat; removed from settings -->
 
