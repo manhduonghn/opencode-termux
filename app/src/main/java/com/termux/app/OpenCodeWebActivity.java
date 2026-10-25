@@ -1727,14 +1727,14 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
         }
     }
 
-    private void applyWakeLock(boolean enable) {
+    private void applyWakeLock(final boolean enable) {
         new Thread(new Runnable() {
             @Override
             public void run() {
                 try {
                     String prefix = com.termux.shared.termux.TermuxConstants.TERMUX_PREFIX_DIR_PATH;
-                    String wakeLock = prefix + "/bin/termux-wake-lock";
-                    String wakeUnlock = prefix + "/bin/termux-wake-unlock";
+                    String wakeLock = prefix + /bin/termux-wake-lock;
+                    String wakeUnlock = prefix + /bin/termux-wake-unlock;
                     java.io.File wakeLockFile = new java.io.File(wakeLock);
                     java.io.File wakeUnlockFile = new java.io.File(wakeUnlock);
                     if (!wakeLockFile.exists() || !wakeUnlockFile.exists()) {
@@ -1749,7 +1749,7 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
                         });
                         return;
                     }
-                    String[] cmd = enable ? new String[]{wakeLock} : new String[]{wakeUnlock};
+                    String cmd = enable ? wakeLock : wakeUnlock;
                     Process p = Runtime.getRuntime().exec(cmd);
                     p.waitFor();
                 } catch (Exception e) {
@@ -1764,7 +1764,7 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
                     });
                 }
             }
-        }, "opencode-wakelock").start();
+        }, opencode-wakelock).start();
     }
 
     private void checkForUpdates() {
