@@ -354,7 +354,7 @@
                     android:background="@drawable/bg_github_icon"
                     android:contentDescription="@string/opencode_power_wakelock"
                     android:padding="9dp"
-                    android:src="@drawable/ic_notification"
+                    android:src="@drawable/ic_refresh"
                     app:tint="@color/github_muted" />
 
                 <LinearLayout
