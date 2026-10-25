@@ -123,11 +123,31 @@
     <string name="opencode_storage_sd_path">~/storage/sdcard%1$d → %2$s</string>
     <string name="opencode_storage_no_sd">Chưa phát hiện thẻ SD. Cắm thẻ rồi bấm Làm mới.</string>
     <string name="opencode_storage_links_missing">Chưa tạo được liên kết ~/storage. Hãy kiểm tra quyền truy cập.</string>
-    <string name="opencode_storage_hint">Trong OpenCode, bấm Open Project rồi nhập một đường dẫn ở trên (ví dụ ~/storage/shared) và nhấn Enter.</string>
+    <string name="opencode_storage_pick">Chọn thư mục</string>
+    <string name="opencode_storage_hint">Bấm “Chọn thư mục” để mở dự án, hoặc nhập đường dẫn trong OpenCode (ví dụ ~/storage/shared).</string>
     <string name="opencode_storage_granted_toast">Đã cấp quyền truy cập bộ nhớ.</string>
     <string name="opencode_storage_primary_only_toast">Đã cấp quyền bộ nhớ máy. Thẻ SD cần quyền “Truy cập tất cả tệp”.</string>
     <string name="opencode_storage_denied">Chưa cấp quyền truy cập bộ nhớ.</string>
     <string name="opencode_storage_permission_failed">Không mở được màn hình cấp quyền. Hãy bật quyền bộ nhớ cho OpenCode trong Cài đặt.</string>
+
+    <!-- Folder picker -->
+    <string name="opencode_picker_title">Chọn thư mục dự án</string>
+    <string name="opencode_picker_up">Lên thư mục cha</string>
+    <string name="opencode_picker_path_hint">Đường dẫn thư mục</string>
+    <string name="opencode_picker_go">Đi</string>
+    <string name="opencode_picker_cancel">Hủy</string>
+    <string name="opencode_picker_choose">Chọn thư mục này</string>
+    <string name="opencode_picker_internal">Bộ nhớ trong</string>
+    <string name="opencode_picker_sd">Thẻ SD %1$s</string>
+    <string name="opencode_picker_termux">Termux</string>
+    <string name="opencode_picker_empty">Thư mục trống</string>
+    <string name="opencode_picker_unreadable">Android không cho phép đọc thư mục này.</string>
+    <string name="opencode_picker_not_directory">Đường dẫn không phải thư mục.</string>
+    <string name="opencode_picker_permission_title">Cần quyền truy cập bộ nhớ</string>
+    <string name="opencode_picker_permission_message">Cấp quyền bộ nhớ để chọn thư mục trong bộ nhớ máy hoặc thẻ SD.</string>
+    <string name="opencode_picker_copied">Đã sao chép đường dẫn: %1$s</string>
+    <string name="opencode_picker_opening">Đang mở dự án %1$s…</string>
+    <string name="opencode_picker_open_failed">Không mở được dự án. Đường dẫn đã được sao chép: %1$s</string>
 
     <!-- OpenCode Updates -->
     <string name="opencode_updates">Cập nhật</string>

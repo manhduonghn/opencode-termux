@@ -478,6 +478,18 @@
                     app:strokeColor="@color/github_surface_stroke" />
             </LinearLayout>
 
+            <Button
+                android:id="@+id/opencode_storage_pick_button"
+                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:minHeight="44dp"
+                android:text="@string/opencode_storage_pick"
+                android:textAllCaps="false"
+                android:textColor="@color/github_accent"
+                app:strokeColor="@color/github_surface_stroke" />
+
             <TextView
                 android:id="@+id/opencode_storage_status"
                 android:layout_width="match_parent"

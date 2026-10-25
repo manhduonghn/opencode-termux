@@ -40,14 +40,21 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.termux.R;
 import com.termux.shared.logger.Logger;
 import com.termux.shared.termux.TermuxConstants;
 import com.termux.shared.termux.shell.command.environment.TermuxShellEnvironment;
 
+import org.json.JSONObject;
+
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.InputStreamReader;
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -71,6 +78,11 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
     private static final int REQUEST_STORAGE_PERMISSION = 1003;
     private static final long SERVICE_START_TIMEOUT_MS = 60_000L;
     private static final long CLI_TIMEOUT_MS = 30_000L;
+
+    /** Preferences file shared by the settings panel. */
+    private static final String PREFS_NAME = "opencode_cfg";
+    /** Absolute path of the last project that was opened from the folder picker. */
+    private static final String PREF_LAST_PROJECT_DIR = "storage_last_project_dir";
 
     /**
      * GitHub CLI's public OAuth app client id. Device flow is a public-client flow, so no
@@ -2156,8 +2168,207 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
                 }
             });
         }
+        View pickButton = findViewById(R.id.opencode_storage_pick_button);
+        if (pickButton != null) {
+            pickButton.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    onPickProjectClicked();
+                }
+            });
+        }
         updateStorageUi();
         ensureStorageLinksIfNeeded();
+    }
+
+    /**
+     * Open the folder picker so the user can choose a project without typing its path. When the
+     * storage permission is still missing the grant flow is offered first.
+     */
+    private void onPickProjectClicked() {
+        if (!StorageAccess.hasStoragePermission(this)) {
+            new MaterialAlertDialogBuilder(this)
+                .setTitle(R.string.opencode_picker_permission_title)
+                .setMessage(R.string.opencode_picker_permission_message)
+                .setPositiveButton(R.string.opencode_storage_grant,
+                    (dialog, which) -> onStorageActionClicked())
+                .setNegativeButton(R.string.opencode_picker_cancel, null)
+                .show();
+            return;
+        }
+
+        DirectoryPickerDialog.show(this, lastProjectDirectory(), new DirectoryPickerDialog.Listener() {
+            @Override
+            public void onDirectorySelected(File directory) {
+                openProjectDirectory(directory);
+            }
+        });
+    }
+
+    /** The directory the picker starts in: the last opened project, else the internal storage. */
+    private File lastProjectDirectory() {
+        android.content.SharedPreferences preferences =
+            getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+        String saved = preferences.getString(PREF_LAST_PROJECT_DIR, null);
+        if (saved != null && !saved.isEmpty()) {
+            File directory = new File(saved);
+            if (directory.isDirectory()) return directory;
+        }
+
+        File primary = StorageAccess.primaryRoot();
+        try {
+            if (primary != null && primary.isDirectory() && primary.list() != null) return primary;
+        } catch (SecurityException ignored) {
+            // Fall back to the Termux home directory below.
+        }
+        return new File(TermuxConstants.TERMUX_HOME_DIR_PATH);
+    }
+
+    /**
+     * Remember the chosen project, copy its path to the clipboard and ask the running OpenCode
+     * server to open it. The clipboard is the fallback when the web UI is not ready or the server
+     * rejects the request.
+     */
+    private void openProjectDirectory(File directory) {
+        if (directory == null) return;
+        final String path = directory.getAbsolutePath();
+
+        getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putString(PREF_LAST_PROJECT_DIR, path)
+            .apply();
+        copyToClipboard(path);
+
+        final String origin = webUiOrigin();
+        if (origin == null) {
+            android.widget.Toast.makeText(this,
+                getString(R.string.opencode_picker_copied, path),
+                android.widget.Toast.LENGTH_LONG).show();
+            return;
+        }
+
+        android.widget.Toast.makeText(this,
+            getString(R.string.opencode_picker_opening, path),
+            android.widget.Toast.LENGTH_SHORT).show();
+
+        final String cookie = CookieManager.getInstance().getCookie(origin);
+        new Thread(() -> {
+            int status;
+            String failure = null;
+            try {
+                status = createSession(origin, cookie, path);
+            } catch (Exception e) {
+                status = -1;
+                failure = e.getMessage();
+            }
+            final int result = status;
+            final String error = failure;
+            runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    if (isFinishing() || isDestroyed()) return;
+                    if (result >= 200 && result < 300) {
+                        View settingsPanel = findViewById(R.id.opencode_settings_panel);
+                        if (settingsPanel != null) settingsPanel.setVisibility(View.GONE);
+                        if (mWebView != null) mWebView.loadUrl(origin + "/");
+                    } else {
+                        Logger.logError(LOG_TAG, "Could not open the project \"" + path
+                            + "\": HTTP " + result + (error == null ? "" : " " + error));
+                        android.widget.Toast.makeText(OpenCodeWebActivity.this,
+                            getString(R.string.opencode_picker_open_failed, path),
+                            android.widget.Toast.LENGTH_LONG).show();
+                    }
+                }
+            });
+        }, "opencode-open-project").start();
+    }
+
+    /** @return the origin of the OpenCode web UI, or {@code null} when it is not ready. */
+    @Nullable
+    private String webUiOrigin() {
+        if (mWebView == null || mPageError || !mAuthCompleted) return null;
+
+        String url = mWebView.getUrl();
+        if (url == null || url.contains("/auth/connect/")) return null;
+
+        Uri uri;
+        try {
+            uri = Uri.parse(url);
+        } catch (Exception e) {
+            return null;
+        }
+
+        String scheme = uri.getScheme();
+        String host = uri.getHost();
+        int port = uri.getPort();
+        if (scheme == null || host == null) return null;
+        if (!"http".equalsIgnoreCase(scheme) && !"https".equalsIgnoreCase(scheme)) return null;
+        if (!"127.0.0.1".equals(host) && !"localhost".equals(host) && !"::1".equals(host)) return null;
+
+        String hostPart = host.indexOf(':') >= 0 ? "[" + host + "]" : host;
+        return port >= 0 ? scheme + "://" + hostPart + ":" + port : scheme + "://" + hostPart;
+    }
+
+    private void copyToClipboard(String text) {
+        try {
+            android.content.ClipboardManager manager =
+                (android.content.ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+            if (manager != null) {
+                manager.setPrimaryClip(ClipData.newPlainText(
+                    getString(R.string.opencode_storage_title), text));
+            }
+        } catch (Exception e) {
+            Logger.logStackTraceWithMessage(LOG_TAG, "Could not copy the project path", e);
+        }
+    }
+
+    /**
+     * Create a session in the given directory. The OpenCode server derives its project list from
+     * the sessions, so the project appears in the web UI after the next page load.
+     *
+     * @return the HTTP status code of the request.
+     */
+    private static int createSession(String origin, @Nullable String cookie, String directory)
+        throws Exception {
+        JSONObject location = new JSONObject();
+        location.put("directory", directory);
+        JSONObject body = new JSONObject();
+        body.put("location", location);
+
+        HttpURLConnection connection =
+            (HttpURLConnection) new URL(origin + "/api/session").openConnection();
+        try {
+            connection.setRequestMethod("POST");
+            connection.setConnectTimeout(5_000);
+            connection.setReadTimeout(15_000);
+            connection.setDoOutput(true);
+            connection.setRequestProperty("Content-Type", "application/json; charset=utf-8");
+            connection.setRequestProperty("Accept", "application/json");
+            if (cookie != null && !cookie.isEmpty()) {
+                connection.setRequestProperty("Cookie", cookie);
+            }
+
+            byte[] payload = body.toString().getBytes(StandardCharsets.UTF_8);
+            connection.setFixedLengthStreamingMode(payload.length);
+            try (OutputStream out = connection.getOutputStream()) {
+                out.write(payload);
+            }
+
+            int status = connection.getResponseCode();
+            java.io.InputStream stream =
+                status >= 400 ? connection.getErrorStream() : connection.getInputStream();
+            if (stream != null) {
+                try (java.io.InputStream in = stream) {
+                    byte[] buffer = new byte[512];
+                    while (in.read(buffer) != -1) {
+                        // Drain the response so the connection can be reused.
+                    }
+                }
+            }
+            return status;
+        } finally {
+            connection.disconnect();
+        }
     }
 
     private void onStorageActionClicked() {

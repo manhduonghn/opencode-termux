@@ -87,7 +87,7 @@ The full technical description, including the error matrix and the security trad
 - **Floating input bar** — a dedicated text field to type prompts into the full screen TUI.
 - **Keeps the device awake** — a wake lock is held while the agent is running.
 - **Projects outside Termux** — open projects in shared device storage (`/storage/emulated/0`) or
-  on an SD card. Grant access from **Settings → Bộ nhớ & SD card**.
+  on an SD card. Grant access from **Settings → Bộ nhớ & SD card**, then tap **Chọn thư mục**.
 
 Supported ABIs: `arm64-v8a` and `x86_64` (the architectures OpenCode publishes builds for).
 
@@ -155,10 +155,13 @@ an SD card.
    is enough, including for an SD card.
 3. The app creates `~/storage/shared` (primary storage) and `~/storage/sdcard1`,
    `~/storage/sdcard2`, … (additional volumes).
-4. In OpenCode choose **Open Project** and type one of those paths (for example
-   `~/storage/shared/Documents/my-project` or `/storage/emulated/0/Documents/my-project`) and press
-   Enter. The picker resolves `~` and absolute paths, but it does not list symlinked directories,
-   so type the path instead of browsing into `~/storage`.
+4. Tap **Chọn thư mục** in the storage section, browse the internal storage or an SD card and
+   select the project folder. The project opens in OpenCode and its path is copied to the
+   clipboard. The picker only lists folders that Android actually allows the app to read.
+5. Alternatively choose **Open Project** inside OpenCode and type one of the paths above (for
+   example `~/storage/shared/Documents/my-project` or `/storage/emulated/0/Documents/my-project`)
+   and press Enter. The picker resolves `~` and absolute paths, but it does not list symlinked
+   directories, so type the path instead of browsing into `~/storage`.
 
 If an SD card was inserted after the app started and does not appear, tap **Làm mới** in the
 storage section. If it still does not appear, fully close and reopen the app.
