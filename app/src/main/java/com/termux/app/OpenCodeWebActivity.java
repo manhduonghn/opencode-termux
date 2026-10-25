@@ -161,7 +161,6 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
 
         configureGitHubSettings();
         configureUpdateCheck();
-        configureWakeLock();
 
         configureWebView();
         requestNotificationPermissionIfNeeded();
@@ -1691,80 +1690,6 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
                 }
             });
         }
-    }
-
-    private void configureWakeLock() {
-        androidx.appcompat.widget.SwitchCompat wakeLockSwitch = findViewById(R.id.opencode_wakelock_switch);
-        TextView wakeLockStatus = findViewById(R.id.opencode_wakelock_status);
-        android.content.SharedPreferences prefs = getSharedPreferences("opencode_prefs", Context.MODE_PRIVATE);
-
-        boolean enabled = prefs.getBoolean("wakelock_enabled", false);
-        if (wakeLockSwitch != null) {
-            wakeLockSwitch.setChecked(enabled);
-            if (enabled) {
-                applyWakeLock(true);
-            } else {
-                applyWakeLock(false);
-            }
-            wakeLockSwitch.setOnCheckedChangeListener(new android.widget.CompoundButton.OnCheckedChangeListener() {
-                @Override
-                public void onCheckedChanged(android.widget.CompoundButton buttonView, boolean isChecked) {
-                    prefs.edit().putBoolean("wakelock_enabled", isChecked).apply();
-                    applyWakeLock(isChecked);
-                    updateWakeLockStatus(wakeLockStatus, isChecked);
-                }
-            });
-        }
-        updateWakeLockStatus(wakeLockStatus, enabled);
-    }
-
-    private void updateWakeLockStatus(TextView wakeLockStatus, boolean enabled) {
-        if (wakeLockStatus == null) return;
-        if (enabled) {
-            wakeLockStatus.setText(R.string.opencode_power_wakelock_on);
-        } else {
-            wakeLockStatus.setText(R.string.opencode_power_wakelock_off);
-        }
-    }
-
-    private void applyWakeLock(final boolean enable) {
-        new Thread(new Runnable() {
-            @Override
-            public void run() {
-                try {
-                    String prefix = com.termux.shared.termux.TermuxConstants.TERMUX_PREFIX_DIR_PATH;
-                    String wakeLock = prefix + /bin/termux-wake-lock;
-                    String wakeUnlock = prefix + /bin/termux-wake-unlock;
-                    java.io.File wakeLockFile = new java.io.File(wakeLock);
-                    java.io.File wakeUnlockFile = new java.io.File(wakeUnlock);
-                    if (!wakeLockFile.exists() || !wakeUnlockFile.exists()) {
-                        runOnUiThread(new Runnable() {
-                            @Override
-                            public void run() {
-                                TextView wakeLockStatus = findViewById(R.id.opencode_wakelock_status);
-                                if (wakeLockStatus != null) {
-                                    wakeLockStatus.setText(R.string.opencode_power_wakelock_missing);
-                                }
-                            }
-                        });
-                        return;
-                    }
-                    String cmd = enable ? wakeLock : wakeUnlock;
-                    Process p = Runtime.getRuntime().exec(cmd);
-                    p.waitFor();
-                } catch (Exception e) {
-                    runOnUiThread(new Runnable() {
-                        @Override
-                        public void run() {
-                            TextView wakeLockStatus = findViewById(R.id.opencode_wakelock_status);
-                            if (wakeLockStatus != null) {
-                                wakeLockStatus.setText(R.string.opencode_power_wakelock_need_api);
-                            }
-                        });
-                    });
-                }
-            }
-        }, opencode-wakelock).start();
     }
 
     private void checkForUpdates() {

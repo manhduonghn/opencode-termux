@@ -114,15 +114,6 @@
     <string name="opencode_updates_failed">Không thể kiểm tra cập nhật</string>
     <string name="opencode_updates_network_error">Lỗi mạng</string>
 
-    <!-- Power / WakeLock -->
-    <string name="opencode_power">Nguồn &amp; pin</string>
-    <string name="opencode_power_wakelock">Giữ thiết bị tỉnh táo</string>
-    <string name="opencode_power_wakelock_desc">Dùng termux-wake-lock để tránh Android giới hạn CPU khi màn hình tắt</string>
-    <string name="opencode_power_wakelock_on">Đang bật</string>
-    <string name="opencode_power_wakelock_off">Đang tắt</string>
-    <string name="opencode_power_wakelock_missing">Chưa cài termux-api. Cài bằng: pkg install termux-api</string>
-    <string name="opencode_power_wakelock_need_api">Cần ứng dụng Termux:API và gói termux-api</string>
-
     <!-- Termux Bootstrap Packages Installation -->
     <string name="bootstrap_installing">Đang cài đặt gói bootstrap Termux...</string>
     <string name="no_wait">Không chờ</string>
