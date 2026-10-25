@@ -530,6 +530,17 @@ final class TermuxInstaller {
     }
 
     static void setupStorageSymlinks(final Context context) {
+        setupStorageSymlinks(context, null);
+    }
+
+    /**
+     * Create the {@code ~/storage} symlinks.
+     *
+     * @param onComplete Optional runnable that is executed on the worker thread after the
+     *                   symlinks were created or the setup failed. The caller is responsible for
+     *                   switching to the UI thread if needed.
+     */
+    static void setupStorageSymlinks(final Context context, final Runnable onComplete) {
         final String LOG_TAG = "termux-storage";
         final String title = TermuxConstants.TERMUX_APP_NAME + " Setup Storage Error";
 
@@ -614,6 +625,22 @@ final class TermuxInstaller {
                         }
                     }
 
+                    // Android only exposes app-specific directories on secondary volumes. With
+                    // the storage permission that covers secondary volumes, the root of an SD
+                    // card can be used directly, so expose it as ~/storage/sdcard1, ...
+                    if (StorageAccess.hasSecondaryVolumeAccess(context)) {
+                        int secondaryIndex = 0;
+                        for (File volumeRoot : StorageAccess.volumeRoots(context)) {
+                            if (StorageAccess.isPrimaryRoot(volumeRoot)) continue;
+                            secondaryIndex++;
+                            String symlinkName = "sdcard" + secondaryIndex;
+                            Logger.logInfo(LOG_TAG, "Setting up storage symlink at ~/storage/" + symlinkName
+                                + " for volume root \"" + volumeRoot.getAbsolutePath() + "\".");
+                            Os.symlink(volumeRoot.getAbsolutePath(),
+                                new File(storageDir, symlinkName).getAbsolutePath());
+                        }
+                    }
+
                     Logger.logInfo(LOG_TAG, "Storage symlinks created successfully.");
                 } catch (Exception e) {
                     Logger.logErrorAndShowToast(context, LOG_TAG, e.getMessage());
@@ -621,6 +648,13 @@ final class TermuxInstaller {
                     TermuxCrashUtils.sendCrashReportNotification(context, LOG_TAG, title, null,
                         "## " + title + "\n\n" + Logger.getStackTracesMarkdownString(null, Logger.getStackTracesStringArray(e)),
                         true, false, TermuxUtils.AppInfoMode.TERMUX_PACKAGE, true);
+                } finally {
+                    if (onComplete != null) {
+                        try {
+                            onComplete.run();
+                        } catch (Throwable ignored) {
+                        }
+                    }
                 }
             }
         }.start();

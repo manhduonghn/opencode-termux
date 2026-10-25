@@ -108,6 +108,27 @@
     <string name="opencode_battery_wakelock_off">Đang tắt</string>
     <string name="opencode_battery_wakelock_missing">Cần cài termux-api (gói + app Termux:API)</string>
 
+    <!-- Shared storage / SD card -->
+    <string name="opencode_storage_title">Bộ nhớ &amp; SD card</string>
+    <string name="opencode_storage_access">Truy cập bộ nhớ ngoài</string>
+    <string name="opencode_storage_desc">Mở dự án trong bộ nhớ máy hoặc thẻ SD</string>
+    <string name="opencode_storage_grant">Cấp quyền</string>
+    <string name="opencode_storage_grant_sd">Cấp quyền SD</string>
+    <string name="opencode_storage_refresh">Làm mới</string>
+    <string name="opencode_storage_not_granted">Chưa cấp quyền. OpenCode chỉ mở được dự án trong thư mục Termux.</string>
+    <string name="opencode_storage_primary_only">Đã cấp quyền bộ nhớ máy. Thẻ SD cần quyền “Truy cập tất cả tệp”.</string>
+    <string name="opencode_storage_granted">Đã cấp quyền truy cập bộ nhớ ngoài.</string>
+    <string name="opencode_storage_setting_up">Đang tạo liên kết ~/storage…</string>
+    <string name="opencode_storage_shared_path">~/storage/shared → %1$s</string>
+    <string name="opencode_storage_sd_path">~/storage/sdcard%1$d → %2$s</string>
+    <string name="opencode_storage_no_sd">Chưa phát hiện thẻ SD. Cắm thẻ rồi bấm Làm mới.</string>
+    <string name="opencode_storage_links_missing">Chưa tạo được liên kết ~/storage. Hãy kiểm tra quyền truy cập.</string>
+    <string name="opencode_storage_hint">Trong OpenCode, bấm Open Project rồi nhập một đường dẫn ở trên (ví dụ ~/storage/shared) và nhấn Enter.</string>
+    <string name="opencode_storage_granted_toast">Đã cấp quyền truy cập bộ nhớ.</string>
+    <string name="opencode_storage_primary_only_toast">Đã cấp quyền bộ nhớ máy. Thẻ SD cần quyền “Truy cập tất cả tệp”.</string>
+    <string name="opencode_storage_denied">Chưa cấp quyền truy cập bộ nhớ.</string>
+    <string name="opencode_storage_permission_failed">Không mở được màn hình cấp quyền. Hãy bật quyền bộ nhớ cho OpenCode trong Cài đặt.</string>
+
     <!-- OpenCode Updates -->
     <string name="opencode_updates">Cập nhật</string>
     <string name="opencode_updates_subtitle">Kiểm tra và cập nhật OpenCode</string>

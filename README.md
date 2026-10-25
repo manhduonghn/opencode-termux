@@ -86,6 +86,8 @@ The full technical description, including the error matrix and the security trad
 - **No root, no proot** — only the Termux user space is used.
 - **Floating input bar** — a dedicated text field to type prompts into the full screen TUI.
 - **Keeps the device awake** — a wake lock is held while the agent is running.
+- **Projects outside Termux** — open projects in shared device storage (`/storage/emulated/0`) or
+  on an SD card. Grant access from **Settings → Bộ nhớ & SD card**.
 
 Supported ABIs: `arm64-v8a` and `x86_64` (the architectures OpenCode publishes builds for).
 
@@ -140,6 +142,26 @@ Long press the terminal to open the menu:
 
 The floating input bar writes the text to the pty of the session using bracketed paste, so the
 agent receives it exactly like a prompt typed in a real terminal.
+
+### Projects on device storage or an SD card
+
+OpenCode can open projects outside `$HOME`, for example in `/storage/emulated/0/Documents` or on
+an SD card.
+
+1. Open the gear menu → **Bộ nhớ & SD card** → **Cấp quyền**.
+2. On Android 11+, enable **All files access** for the app. This is required to read and write the
+   root of an SD card. If it is denied, the app falls back to the legacy storage permission, which
+   still covers the primary shared storage. On Android 10 and lower the normal storage permission
+   is enough, including for an SD card.
+3. The app creates `~/storage/shared` (primary storage) and `~/storage/sdcard1`,
+   `~/storage/sdcard2`, … (additional volumes).
+4. In OpenCode choose **Open Project** and type one of those paths (for example
+   `~/storage/shared/Documents/my-project` or `/storage/emulated/0/Documents/my-project`) and press
+   Enter. The picker resolves `~` and absolute paths, but it does not list symlinked directories,
+   so type the path instead of browsing into `~/storage`.
+
+If an SD card was inserted after the app started and does not appear, tap **Làm mới** in the
+storage section. If it still does not appear, fully close and reopen the app.
 
 ---
 

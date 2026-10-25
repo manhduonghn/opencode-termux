@@ -68,6 +68,7 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
 
     private static final int REQUEST_FILE_CHOOSER = 1001;
     private static final int REQUEST_NOTIFICATION_PERMISSION = 1002;
+    private static final int REQUEST_STORAGE_PERMISSION = 1003;
     private static final long SERVICE_START_TIMEOUT_MS = 60_000L;
     private static final long CLI_TIMEOUT_MS = 30_000L;
 
@@ -100,6 +101,10 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
     private LinearLayout mGitHubRepoList;
     private TextView mGitHubRepoStatus;
     private Button mGitHubRepoRefreshButton;
+    private TextView mStorageStatus;
+    private Button mStorageGrantButton;
+    private boolean mStorageSetupRunning;
+    private boolean mStorageLegacyFallbackRequested;
 
     @Nullable
     private ValueCallback<Uri[]> mFilePathCallback;
@@ -182,6 +187,7 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
         configureGitHubSettings();
         configureUpdateCheck();
         setupWakeLock();
+        configureStorageSettings();
 
         configureWebView();
         requestNotificationPermissionIfNeeded();
@@ -221,6 +227,10 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
             OpenCodeBootstrap.checkRuntime(this);
         }
         reloadIfStopped();
+        // The user may have granted the permission in the system settings while the app was
+        // in the background, without returning through onActivityResult().
+        updateStorageUi();
+        ensureStorageLinksIfNeeded();
     }
 
     @Override
@@ -445,6 +455,8 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         if (requestCode == REQUEST_NOTIFICATION_PERMISSION) {
             OpenCodeForegroundService.start(this);
+        } else if (requestCode == REQUEST_STORAGE_PERMISSION) {
+            onStoragePermissionReturned();
         }
     }
 
@@ -2129,6 +2141,191 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
         status.setText(on ? R.string.opencode_battery_wakelock_on : R.string.opencode_battery_wakelock_off);
     }
 
+    /* ==========================================================================================
+     * Shared storage / SD card
+     * ========================================================================================== */
+
+    private void configureStorageSettings() {
+        mStorageStatus = findViewById(R.id.opencode_storage_status);
+        mStorageGrantButton = findViewById(R.id.opencode_storage_grant_button);
+        if (mStorageGrantButton != null) {
+            mStorageGrantButton.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    onStorageActionClicked();
+                }
+            });
+        }
+        updateStorageUi();
+        ensureStorageLinksIfNeeded();
+    }
+
+    private void onStorageActionClicked() {
+        mStorageLegacyFallbackRequested = false;
+        boolean fullAccess = StorageAccess.hasAllFilesAccess(this);
+        boolean legacy = StorageAccess.hasLegacyStoragePermission(this);
+
+        // The symlinks already exist and the user only wants to refresh them, for example
+        // after inserting an SD card.
+        if (fullAccess || (Build.VERSION.SDK_INT < Build.VERSION_CODES.R && legacy)) {
+            runStorageSetup();
+            return;
+        }
+
+        boolean started = StorageAccess.requestStoragePermission(this, REQUEST_STORAGE_PERMISSION);
+        if (!started && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            // The "All files access" settings screen is not available on this device. Fall
+            // back to the legacy runtime permission so that the primary storage still works.
+            started = StorageAccess.requestLegacyStoragePermission(this, REQUEST_STORAGE_PERMISSION);
+        }
+        if (!started) {
+            android.widget.Toast.makeText(this, R.string.opencode_storage_permission_failed,
+                android.widget.Toast.LENGTH_LONG).show();
+        }
+    }
+
+    /**
+     * Called after the "All files access" settings screen or the legacy runtime permission
+     * dialog returns. The result code is not reliable here, so the actual permission state is
+     * checked instead.
+     */
+    private void onStoragePermissionReturned() {
+        boolean fullAccess = StorageAccess.hasAllFilesAccess(this);
+        boolean legacy = StorageAccess.hasLegacyStoragePermission(this);
+
+        if (fullAccess || legacy) {
+            mStorageLegacyFallbackRequested = false;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && !fullAccess) {
+                android.widget.Toast.makeText(this, R.string.opencode_storage_primary_only_toast,
+                    android.widget.Toast.LENGTH_LONG).show();
+            } else {
+                android.widget.Toast.makeText(this, R.string.opencode_storage_granted_toast,
+                    android.widget.Toast.LENGTH_SHORT).show();
+            }
+            runStorageSetup();
+            return;
+        }
+
+        // On Android 11+ the user may decline "All files access". Fall back to the legacy
+        // permission once so that at least the primary shared storage keeps working.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && !mStorageLegacyFallbackRequested) {
+            mStorageLegacyFallbackRequested = true;
+            if (StorageAccess.requestLegacyStoragePermission(this, REQUEST_STORAGE_PERMISSION)) {
+                return;
+            }
+        }
+
+        mStorageLegacyFallbackRequested = false;
+        updateStorageUi();
+        android.widget.Toast.makeText(this, R.string.opencode_storage_denied,
+            android.widget.Toast.LENGTH_LONG).show();
+    }
+
+    private void ensureStorageLinksIfNeeded() {
+        if (mStorageSetupRunning || !StorageAccess.hasStoragePermission(this)) return;
+
+        File shared = new File(TermuxConstants.TERMUX_STORAGE_HOME_DIR, "shared");
+        if (!shared.exists()) {
+            runStorageSetup();
+            return;
+        }
+
+        // A secondary volume may have been inserted after the last setup, or the permission
+        // needed for it may have been granted after the primary storage was already set up.
+        if (!StorageAccess.hasSecondaryVolumeAccess(this)) return;
+        int index = 0;
+        for (File root : StorageAccess.volumeRoots(this)) {
+            if (StorageAccess.isPrimaryRoot(root)) continue;
+            index++;
+            File link = new File(TermuxConstants.TERMUX_STORAGE_HOME_DIR, "sdcard" + index);
+            if (!link.exists()) {
+                runStorageSetup();
+                return;
+            }
+        }
+    }
+
+    private void runStorageSetup() {
+        if (mStorageSetupRunning) return;
+        mStorageSetupRunning = true;
+        if (mStorageStatus != null) mStorageStatus.setText(R.string.opencode_storage_setting_up);
+        if (mStorageGrantButton != null) mStorageGrantButton.setEnabled(false);
+
+        try {
+            TermuxInstaller.setupStorageSymlinks(getApplicationContext(), new Runnable() {
+                @Override
+                public void run() {
+                    runOnUiThread(new Runnable() {
+                        @Override
+                        public void run() {
+                            mStorageSetupRunning = false;
+                            if (isFinishing() || isDestroyed()) return;
+                            updateStorageUi();
+                        }
+                    });
+                }
+            });
+        } catch (Throwable t) {
+            Logger.logStackTraceWithMessage(LOG_TAG, "Failed to start the storage setup", t);
+            mStorageSetupRunning = false;
+            updateStorageUi();
+        }
+    }
+
+    private void updateStorageUi() {
+        if (mStorageStatus == null || mStorageSetupRunning) return;
+
+        boolean fullAccess = StorageAccess.hasAllFilesAccess(this);
+        boolean legacy = StorageAccess.hasLegacyStoragePermission(this);
+
+        if (mStorageGrantButton != null) {
+            mStorageGrantButton.setEnabled(true);
+            if (fullAccess || (Build.VERSION.SDK_INT < Build.VERSION_CODES.R && legacy)) {
+                mStorageGrantButton.setText(R.string.opencode_storage_refresh);
+            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && legacy) {
+                mStorageGrantButton.setText(R.string.opencode_storage_grant_sd);
+            } else {
+                mStorageGrantButton.setText(R.string.opencode_storage_grant);
+            }
+        }
+
+        if (!fullAccess && !legacy) {
+            mStorageStatus.setText(R.string.opencode_storage_not_granted);
+            return;
+        }
+
+        StringBuilder status = new StringBuilder();
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && !fullAccess) {
+            status.append(getString(R.string.opencode_storage_primary_only));
+        } else {
+            status.append(getString(R.string.opencode_storage_granted));
+        }
+
+        File shared = new File(TermuxConstants.TERMUX_STORAGE_HOME_DIR, "shared");
+        if (shared.exists()) {
+            status.append('\n').append(getString(R.string.opencode_storage_shared_path,
+                StorageAccess.primaryRoot().getAbsolutePath()));
+        } else {
+            status.append('\n').append(getString(R.string.opencode_storage_links_missing));
+        }
+
+        if (StorageAccess.hasSecondaryVolumeAccess(this)) {
+            int sdIndex = 0;
+            for (File root : StorageAccess.volumeRoots(this)) {
+                if (StorageAccess.isPrimaryRoot(root)) continue;
+                sdIndex++;
+                status.append('\n').append(getString(R.string.opencode_storage_sd_path,
+                    sdIndex, root.getAbsolutePath()));
+            }
+            if (sdIndex == 0) {
+                status.append('\n').append(getString(R.string.opencode_storage_no_sd));
+            }
+        }
+
+        status.append('\n').append(getString(R.string.opencode_storage_hint));
+        mStorageStatus.setText(status.toString());
+    }
+
     public static Intent newInstance(Context context) {
         Intent intent = new Intent(context, OpenCodeWebActivity.class);
         intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
@@ -2137,6 +2334,10 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
 
     @Override
     protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
+        if (requestCode == REQUEST_STORAGE_PERMISSION) {
+            onStoragePermissionReturned();
+            return;
+        }
         if (requestCode == REQUEST_FILE_CHOOSER) {
             if (mFilePathCallback == null) return;
 
