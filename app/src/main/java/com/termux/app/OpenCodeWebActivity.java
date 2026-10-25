@@ -1810,6 +1810,16 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
                 @Override
                 public void onCheckedChanged(android.widget.CompoundButton b, boolean checked) {
                     p.edit().putBoolean("wake_lock", checked).apply();
+                    if (checked) {
+                        try {
+                            android.os.PowerManager pm = (android.os.PowerManager) getSystemService(Context.POWER_SERVICE);
+                            if (pm != null && !pm.isIgnoringBatteryOptimizations(getPackageName())) {
+                                Intent intent = new Intent(android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS);
+                                intent.setData(android.net.Uri.parse("package:" + getPackageName()));
+                                try { startActivity(intent); } catch (Throwable ignored) {}
+                            }
+                        } catch (Throwable ignored) {}
+                    }
                     new Thread(() -> {
                         try {
                             String cmd = checked ? prefix + "/bin/termux-wake-lock" : prefix + "/bin/termux-wake-unlock";
@@ -1870,6 +1880,16 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
                                 @Override
                                 public void onCheckedChanged(android.widget.CompoundButton b, boolean checked) {
                                     p.edit().putBoolean("wake_lock", checked).apply();
+                                    if (checked) {
+                                        try {
+                                            android.os.PowerManager pm = (android.os.PowerManager) getSystemService(Context.POWER_SERVICE);
+                                            if (pm != null && !pm.isIgnoringBatteryOptimizations(getPackageName())) {
+                                                Intent intent = new Intent(android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS);
+                                                intent.setData(android.net.Uri.parse("package:" + getPackageName()));
+                                                try { startActivity(intent); } catch (Throwable ignored) {}
+                                            }
+                                        } catch (Throwable ignored) {}
+                                    }
                                     new Thread(() -> {
                                         try {
                                             String cmd = checked ? prefix + "/bin/termux-wake-lock" : prefix + "/bin/termux-wake-unlock";
