@@ -1844,10 +1844,10 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
             try {
                 String out = runShellStreaming("pkg install -y termux-api", 300000L, new StreamListener() {
                     @Override
-                    public void onLine(String line, String snapshot, java.io.OutputStream stdin) {
+                    public void onLine(String line) {
                         runOnUiThread(() -> {
                             if (status != null) {
-                                String s = snapshot == null ? line : snapshot;
+                                String s = line;
                                 if (s.length() > 400) s = s.substring(s.length() - 400);
                                 status.setText(s);
                             }
