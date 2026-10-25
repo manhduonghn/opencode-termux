@@ -462,11 +462,20 @@
                         android:textSize="12sp" />
                 </LinearLayout>
 
-                <androidx.appcompat.widget.SwitchCompat
-                    android:id="@+id/opencode_extension_github"
+                <Button
+                    android:id="@+id/opencode_github_install_button"
+                    style="@style/Widget.MaterialComponents.Button"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginStart="8dp" />
+                    android:layout_marginStart="8dp"
+                    android:backgroundTint="@color/github_accent"
+                    android:minHeight="42dp"
+                    android:minWidth="0dp"
+                    android:paddingStart="16dp"
+                    android:paddingEnd="16dp"
+                    android:text="Tải git &amp; gh"
+                    android:textAllCaps="false"
+                    android:textColor="@color/white" />
             </LinearLayout>
 
             <LinearLayout
@@ -530,18 +539,6 @@
                     android:textSize="11sp"
                     android:textIsSelectable="true"
                     android:visibility="gone" />
-
-                <Button
-                    android:id="@+id/opencode_github_install_button"
-                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="14dp"
-                    android:minHeight="46dp"
-                    android:text="Cài đặt git &amp; gh"
-                    android:textAllCaps="false"
-                    android:textColor="@color/github_accent"
-                    app:strokeColor="@color/github_surface_stroke" />
 
                 <Button
                     android:id="@+id/opencode_github_login_button"
@@ -628,6 +625,66 @@
                     android:visibility="gone" />
 
                 <LinearLayout
+                    android:id="@+id/opencode_github_repo_section"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:visibility="gone">
+
+                    <View
+                        android:layout_width="match_parent"
+                        android:layout_height="1dp"
+                        android:layout_marginTop="18dp"
+                        android:background="@color/github_surface_stroke" />
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="18dp"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <TextView
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:letterSpacing="0.08"
+                            android:text="REPOSITORY CỦA BẠN"
+                            android:textColor="@color/github_muted"
+                            android:textSize="11sp"
+                            android:textStyle="bold" />
+
+                        <Button
+                            android:id="@+id/opencode_github_repo_refresh"
+                            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:minHeight="40dp"
+                            android:minWidth="0dp"
+                            android:paddingStart="14dp"
+                            android:paddingEnd="14dp"
+                            android:text="Tải lại"
+                            android:textAllCaps="false"
+                            android:textColor="@color/github_accent"
+                            app:strokeColor="@color/github_surface_stroke" />
+                    </LinearLayout>
+
+                    <TextView
+                        android:id="@+id/opencode_github_repo_status"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:textColor="@color/github_muted"
+                        android:textSize="12sp" />
+
+                    <LinearLayout
+                        android:id="@+id/opencode_github_repo_list"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical" />
+                </LinearLayout>
+
+                <LinearLayout
                     android:id="@+id/opencode_github_clone_section"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
@@ -645,7 +702,7 @@
                         android:layout_height="wrap_content"
                         android:layout_marginTop="18dp"
                         android:letterSpacing="0.08"
-                        android:text="CLONE REPOSITORY"
+                        android:text="CLONE THỦ CÔNG"
                         android:textColor="@color/github_muted"
                         android:textSize="11sp"
                         android:textStyle="bold" />
@@ -673,6 +730,19 @@
                         android:text="Clone"
                         android:textAllCaps="false"
                         android:textColor="@color/white" />
+
+                    <TextView
+                        android:id="@+id/opencode_github_clone_status"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:ellipsize="end"
+                        android:fontFamily="monospace"
+                        android:maxLines="6"
+                        android:textColor="@color/github_muted"
+                        android:textSize="10sp"
+                        android:textIsSelectable="true"
+                        android:visibility="gone" />
                 </LinearLayout>
             </LinearLayout>
         </LinearLayout>
