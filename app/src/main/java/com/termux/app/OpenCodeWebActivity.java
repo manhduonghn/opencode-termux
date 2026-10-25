@@ -1749,12 +1749,7 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
                         });
                         return;
                     }
-                    String[] cmd;
-                    if (enable) {
-                        cmd = new String[]{wakeLock};
-                    } else {
-                        cmd = new String[]{wakeUnlock};
-                    }
+                    String[] cmd = enable ? new String[]{wakeLock} : new String[]{wakeUnlock};
                     Process p = Runtime.getRuntime().exec(cmd);
                     p.waitFor();
                 } catch (Exception e) {
