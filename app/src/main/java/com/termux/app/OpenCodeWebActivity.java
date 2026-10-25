@@ -1750,12 +1750,13 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
 
     private String fetchLatestVersion() {
         try {
-            java.net.URL url = new java.net.URL("https://registry.npmjs.org/opencode-ai/latest");
+            java.net.URL url = new java.net.URL("https://opencode.ai/update/api/latest/cli/npm");
             java.net.HttpURLConnection conn = (java.net.HttpURLConnection) url.openConnection();
             conn.setConnectTimeout(15000);
             conn.setReadTimeout(15000);
             conn.setRequestMethod("GET");
             conn.setRequestProperty("User-Agent", "Termux-OpenCode");
+            conn.setRequestProperty("Accept", "application/json");
             int code = conn.getResponseCode();
             if (code != 200) {
                 return null;
