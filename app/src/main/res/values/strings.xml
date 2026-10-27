@@ -130,6 +130,43 @@
     <string name="opencode_storage_denied">Chưa cấp quyền truy cập bộ nhớ.</string>
     <string name="opencode_storage_permission_failed">Không mở được màn hình cấp quyền. Hãy bật quyền bộ nhớ cho OpenCode trong Cài đặt.</string>
 
+    <!-- Downloaded files in Termux HOME -->
+    <string name="opencode_files_title">Tệp đã tải</string>
+    <string name="opencode_files_access">Quản lý tệp trong Termux</string>
+    <string name="opencode_files_desc">Xem dung lượng, mở hoặc xoá repo đã clone và tệp đã tải trong thư mục Termux.</string>
+    <string name="opencode_files_manage">Quản lý</string>
+    <string name="opencode_files_dialog_title">Tệp đã tải trong Termux</string>
+    <string name="opencode_files_scanning">Đang quét thư mục Termux…</string>
+    <string name="opencode_files_empty">Chưa có tệp nào trong Termux.</string>
+    <string name="opencode_files_unreadable">Không đọc được thư mục Termux.</string>
+    <string name="opencode_files_summary">%1$d mục · %2$s · máy còn trống %3$s</string>
+    <string name="opencode_files_summary_no_free">%1$d mục · %2$s</string>
+    <string name="opencode_files_kind_dir">Thư mục</string>
+    <string name="opencode_files_kind_file">Tệp</string>
+    <string name="opencode_files_kind_repo">Git repo</string>
+    <string name="opencode_files_meta">%1$s · %2$s · %3$s</string>
+    <string name="opencode_files_size_unknown">không rõ dung lượng</string>
+    <string name="opencode_files_open">Mở dự án</string>
+    <string name="opencode_files_copy_path">Sao chép đường dẫn</string>
+    <string name="opencode_files_copied">Đã sao chép đường dẫn</string>
+    <string name="opencode_files_delete">Xoá</string>
+    <string name="opencode_files_cancel">Huỷ</string>
+    <string name="opencode_files_delete_title">Xoá “%1$s”?</string>
+    <string name="opencode_files_delete_message_dir">Toàn bộ %1$s trong thư mục này sẽ bị xoá vĩnh viễn.</string>
+    <string name="opencode_files_delete_message_file">Tệp %1$s sẽ bị xoá vĩnh viễn.</string>
+    <string name="opencode_files_deleting">Đang xoá %1$s…</string>
+    <string name="opencode_files_deleted">Đã xoá %1$s</string>
+    <string name="opencode_files_delete_failed">Không xoá được %1$s</string>
+    <string name="opencode_files_delete_unsafe">Không thể xoá mục này vì lý do an toàn.</string>
+    <string name="opencode_files_busy">Đang xử lý, vui lòng đợi…</string>
+    <string name="opencode_files_refresh">Làm mới</string>
+    <string name="opencode_files_time_now">vừa xong</string>
+    <string name="opencode_files_time_unknown">không rõ thời gian</string>
+    <string name="opencode_files_time_minutes">%1$d phút trước</string>
+    <string name="opencode_files_time_hours">%1$d giờ trước</string>
+    <string name="opencode_files_time_days">%1$d ngày trước</string>
+    <string name="opencode_files_hint">Chỉ hiển thị tệp và thư mục ở cấp đầu tiên của thư mục Termux. Các mục ẩn và tệp hệ thống được giữ nguyên.</string>
+
     <!-- Folder picker -->
     <string name="opencode_picker_title">Chọn thư mục dự án</string>
     <string name="opencode_picker_up">Lên thư mục cha</string>

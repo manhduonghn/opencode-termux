@@ -200,6 +200,7 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
         configureUpdateCheck();
         setupWakeLock();
         configureStorageSettings();
+        configureFileManagerSettings();
 
         configureWebView();
         requestNotificationPermissionIfNeeded();
@@ -2179,6 +2180,30 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
         }
         updateStorageUi();
         ensureStorageLinksIfNeeded();
+    }
+
+    /**
+     * The "downloaded files" row opens the manager for the Termux home directory. A directory
+     * that the user chooses there is opened as an OpenCode project, exactly like a folder from
+     * the folder picker.
+     */
+    private void configureFileManagerSettings() {
+        View row = findViewById(R.id.opencode_files_row);
+        Button manage = findViewById(R.id.opencode_files_manage_button);
+        View.OnClickListener open = new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                FileManagerDialog.show(OpenCodeWebActivity.this,
+                    new FileManagerDialog.Listener() {
+                        @Override
+                        public void onOpenProject(File directory) {
+                            openProjectDirectory(directory);
+                        }
+                    });
+            }
+        };
+        if (row != null) row.setOnClickListener(open);
+        if (manage != null) manage.setOnClickListener(open);
     }
 
     /**

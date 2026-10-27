@@ -88,6 +88,8 @@ The full technical description, including the error matrix and the security trad
 - **Keeps the device awake** — a wake lock is held while the agent is running.
 - **Projects outside Termux** — open projects in shared device storage (`/storage/emulated/0`) or
   on an SD card. Grant access from **Settings → Bộ nhớ & SD card**, then tap **Chọn thư mục**.
+- **Manage downloaded files** — **Settings → Tệp đã tải → Quản lý** lists the repos and files
+  in `$HOME` with their size and age. Open a folder as a project, copy its path or delete it.
 
 Supported ABIs: `arm64-v8a` and `x86_64` (the architectures OpenCode publishes builds for).
 
@@ -165,6 +167,20 @@ an SD card.
 
 If an SD card was inserted after the app started and does not appear, tap **Làm mới** in the
 storage section. If it still does not appear, fully close and reopen the app.
+
+### Managing downloaded files in Termux
+
+Repositories cloned from the GitHub section and other files written to `$HOME` accumulate over
+time. Open the gear menu → **Tệp đã tải** → **Quản lý** to list them with their size, age
+and the free space of the Termux partition. Tap an entry to:
+
+- **Mở dự án** — create an OpenCode session for that folder.
+- **Sao chép đường dẫn** — copy the absolute path.
+- **Xoá** — delete the entry after a confirmation. Deleting a repository removes the whole folder,
+  including `.git`, and cannot be undone.
+
+Only top level entries are shown. Hidden entries and the directories the app manages itself
+(`~/storage`, `~/tmp`, `~/usr`, `~/.opencode`) are never listed or deleted.
 
 ---
 
