@@ -88,8 +88,12 @@ The full technical description, including the error matrix and the security trad
 - **Keeps the device awake** — a wake lock is held while the agent is running.
 - **Projects outside Termux** — open projects in shared device storage (`/storage/emulated/0`) or
   on an SD card. Grant access from **Settings → Bộ nhớ & SD card**, then tap **Chọn thư mục**.
-- **Manage downloaded files** — **Settings → Tệp đã tải → Quản lý** lists the repos and files
-  in `$HOME` with their size and age. Open a folder as a project, copy its path or delete it.
+- **Full file manager** — **Settings → Tệp & thư mục → Mở** browses `$HOME`, the shared device
+  storage and SD cards. Open a folder as a project, open files with other apps, share one or more
+  entries (folders are zipped automatically), rename, create, delete, search, sort and inspect
+  sizes.
+- **Share sheet integration** — the app appears in the Android share sheet. Files shared to it are
+  copied to `~/Downloads` and opened in the file manager.
 
 Supported ABIs: `arm64-v8a` and `x86_64` (the architectures OpenCode publishes builds for).
 
@@ -168,19 +172,33 @@ an SD card.
 If an SD card was inserted after the app started and does not appear, tap **Làm mới** in the
 storage section. If it still does not appear, fully close and reopen the app.
 
-### Managing downloaded files in Termux
+### File manager and the Android share sheet
 
 Repositories cloned from the GitHub section and other files written to `$HOME` accumulate over
-time. Open the gear menu → **Tệp đã tải** → **Quản lý** to list them with their size, age
-and the free space of the Termux partition. Tap an entry to:
+time. Open the gear menu → **Tệp & thư mục** → **Mở** to browse the Termux home directory, the
+shared device storage and an SD card.
 
-- **Mở dự án** — create an OpenCode session for that folder.
-- **Sao chép đường dẫn** — copy the absolute path.
-- **Xoá** — delete the entry after a confirmation. Deleting a repository removes the whole folder,
-  including `.git`, and cannot be undone.
+- **Chạm** (tap) a folder to enter it, or a file to open it with a compatible app.
+- **Nhấn giữ** (long press) to start a selection. Select as many entries as needed and use the
+  toolbar to **share**, **delete** or **select all**.
+- **⋮** opens the actions for one entry: open, **Mở làm dự án**, **Chia sẻ**, copy path, rename,
+  details and delete.
+- **↑ / ⌂** navigate to the parent directory or back to `~`. The path is clickable and copies the
+  current directory.
+- The toolbar also contains search, a hidden-files toggle, sorting (name, size, modification time)
+  and **Thư mục mới** / **Tệp mới**.
 
-Only top level entries are shown. Hidden entries and the directories the app manages itself
-(`~/storage`, `~/tmp`, `~/usr`, `~/.opencode`) are never listed or deleted.
+**Sharing** uses the normal Android share sheet. Files are exposed through a non-exported
+`FileProvider` with a temporary, per-URI read grant. Folders are zipped into the app cache first,
+so a whole repository can be sent as one `.zip`.
+
+The app is also a share target. When a file is shared to OpenCode from another app it is copied to
+`~/Downloads` (name collisions get a ` (1)`, ` (2)`, … suffix) and the file manager opens at that
+folder. Text shared without a file is saved as a `.txt` file.
+
+Deleting is permanent and cannot be undone. The directories that Termux and the app need
+(`$PREFIX`, `~/.opencode`, `~`, the storage roots) are protected and symlinks are deleted as links,
+never by following their target.
 
 ---
 

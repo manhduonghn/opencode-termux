@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Files in the Termux home directory, the rest of the Termux files directory, and the
+         app cache that holds zipped folders before they are shared. -->
+    <files-path
+        name="termux_home"
+        path="home/" />
+    <files-path
+        name="termux_files"
+        path="." />
+    <cache-path
+        name="share_cache"
+        path="shared/" />
+    <!-- Shared device storage and SD cards, so that any file the manager can browse can also
+         be opened or shared. Only the exact content URI that was granted is readable. -->
+    <external-path
+        name="external_storage"
+        path="." />
+    <root-path
+        name="root"
+        path="/" />
+</paths>

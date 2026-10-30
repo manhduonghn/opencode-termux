@@ -76,6 +76,13 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
     private static final int REQUEST_FILE_CHOOSER = 1001;
     private static final int REQUEST_NOTIFICATION_PERMISSION = 1002;
     private static final int REQUEST_STORAGE_PERMISSION = 1003;
+
+    /**
+     * Absolute path of a directory that the file manager should open. Used by
+     * {@link com.termux.app.api.file.FileReceiverActivity} after files are received from the
+     * Android share sheet.
+     */
+    public static final String EXTRA_OPEN_DIRECTORY = "com.termux.opencode.OPEN_DIRECTORY";
     private static final long SERVICE_START_TIMEOUT_MS = 60_000L;
     private static final long CLI_TIMEOUT_MS = 30_000L;
 
@@ -202,6 +209,10 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
         configureStorageSettings();
         configureFileManagerSettings();
 
+        // A share intent can create the activity. Post the dialog so that it is shown after the
+        // content view has been laid out.
+        getWindow().getDecorView().post(() -> handleOpenDirectoryIntent(getIntent()));
+
         configureWebView();
         requestNotificationPermissionIfNeeded();
         ensureRuntime();
@@ -275,6 +286,7 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
         super.onNewIntent(intent);
         setIntent(intent);
         handleForceUpdateIntent();
+        handleOpenDirectoryIntent(intent);
 
         // The app is a singleTask activity: tapping the launcher again does not recreate it but
         // delivers this intent. If the service was stopped in the meantime (notification exit or
@@ -2183,9 +2195,9 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
     }
 
     /**
-     * The "downloaded files" row opens the manager for the Termux home directory. A directory
-     * that the user chooses there is opened as an OpenCode project, exactly like a folder from
-     * the folder picker.
+     * The file manager row opens the manager for the Termux home directory. A directory that the
+     * user chooses there is opened as an OpenCode project, exactly like a folder from the folder
+     * picker.
      */
     private void configureFileManagerSettings() {
         View row = findViewById(R.id.opencode_files_row);
@@ -2204,6 +2216,26 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
         };
         if (row != null) row.setOnClickListener(open);
         if (manage != null) manage.setOnClickListener(open);
+    }
+
+    /**
+     * Open the file manager at a directory received from the share sheet. The extra is removed
+     * immediately so that a configuration change or a new intent cannot show the dialog twice.
+     */
+    private void handleOpenDirectoryIntent(@Nullable Intent intent) {
+        if (intent == null) return;
+        String path = intent.getStringExtra(EXTRA_OPEN_DIRECTORY);
+        if (path == null || path.isEmpty()) return;
+        intent.removeExtra(EXTRA_OPEN_DIRECTORY);
+
+        File directory = new File(path);
+        if (!directory.isDirectory()) directory = new File(TermuxConstants.TERMUX_HOME_DIR_PATH);
+        FileManagerDialog.show(this, directory, new FileManagerDialog.Listener() {
+            @Override
+            public void onOpenProject(File project) {
+                openProjectDirectory(project);
+            }
+        });
     }
 
     /**

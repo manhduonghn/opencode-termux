@@ -5,11 +5,12 @@
     android:layout_height="wrap_content"
     android:background="?attr/selectableItemBackground"
     android:gravity="center_vertical"
+    android:minHeight="52dp"
     android:orientation="horizontal"
     android:paddingStart="8dp"
-    android:paddingTop="6dp"
-    android:paddingEnd="4dp"
-    android:paddingBottom="6dp">
+    android:paddingTop="4dp"
+    android:paddingEnd="2dp"
+    android:paddingBottom="4dp">
 
     <ImageView
         android:id="@+id/managed_file_icon"
@@ -46,14 +47,22 @@
             android:textSize="11sp" />
     </LinearLayout>
 
+    <CheckBox
+        android:id="@+id/managed_file_check"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:clickable="false"
+        android:focusable="false"
+        android:visibility="gone" />
+
     <ImageButton
-        android:id="@+id/managed_file_delete"
+        android:id="@+id/managed_file_more"
         android:layout_width="40dp"
         android:layout_height="40dp"
         android:background="?attr/selectableItemBackgroundBorderless"
-        android:contentDescription="@string/opencode_files_delete"
+        android:contentDescription="@string/opencode_files_more"
         android:focusable="false"
         android:padding="10dp"
-        android:src="@drawable/ic_delete"
+        android:src="@drawable/ic_more"
         app:tint="@color/github_muted" />
 </LinearLayout>
