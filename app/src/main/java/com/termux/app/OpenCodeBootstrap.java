@@ -29,6 +29,7 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.io.PrintWriter;
+import java.io.RandomAccessFile;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.security.MessageDigest;
@@ -109,6 +110,10 @@ public final class OpenCodeBootstrap {
     public static final String LINK_DIR = OC_HOME + "/bin";
     /** Symlink pointing to the currently installed binary. */
     public static final String LINK_PATH = LINK_DIR + "/opencode";
+    /** Patched copy of the terminal helper that OpenCode normally extracts at run time. */
+    public static final String PTY_BIN_PATH = LINK_DIR + "/opencode-pty";
+    /** Fingerprint of the OpenCode binary the terminal helper was extracted from. */
+    public static final String PTY_MARKER_PATH = OC_HOME + "/.pty";
     /** Contains the version that is currently installed. */
     public static final String READY_MARKER_PATH = OC_HOME + "/.native-ready";
     /** Fingerprint ({@code <size> <mtime>}) of the binary that has been patched. */
@@ -151,7 +156,7 @@ public final class OpenCodeBootstrap {
      * ========================================================================================== */
 
     /** Bumped whenever the launcher scripts change so that they get rewritten. */
-    private static final int LAUNCHER_VERSION = 3;
+    private static final int LAUNCHER_VERSION = 4;
 
     private static final String LAUNCHER_MARKER = "Managed by the OpenCode for Termux app. opencode-launcher-version: " + LAUNCHER_VERSION;
 
@@ -619,6 +624,8 @@ public final class OpenCodeBootstrap {
             restoreLauncher(new File(OPENCODE_BIN_PATH), buildOpenCodeLauncher());
             restoreLauncher(new File(OC_INSTALL_PATH), buildOcInstallLauncher());
             repairInterpreterIfNeeded(context);
+            String loader = findGlibcLoader();
+            if (loader != null) ensurePtyHelper(loader);
         }
 
         /* ------------------------------------------------------------------ apt */
@@ -1194,12 +1201,199 @@ public final class OpenCodeBootstrap {
                 Logger.logStackTraceWithMessage(LOG_TAG, "Could not make the OpenCode binary executable", e);
             }
 
+            ensurePtyHelper(target, loader);
+
             return target;
         }
 
         private CmdResult patchInterpreter(File file, String loader) {
             return run(Arrays.asList(PREFIX + "/bin/patchelf", "--set-interpreter", loader, file.getAbsolutePath()),
                 PATCH_TIMEOUT_MS, false, null);
+        }
+
+        /**
+         * Extract the {@code opencode-pty} helper that OpenCode embeds in its executable, patch it
+         * for Android and install it next to the {@code opencode} symlink.
+         *
+         * <p>The helper is a glibc ELF that OpenCode writes to its cache at run time. That copy has
+         * the interpreter {@code /lib/ld-linux-*.so.*}, which does not exist on Android, so the web
+         * terminal cannot be started. The launcher points {@code OPENCODE_PTY_BIN} at the copy
+         * prepared here instead.</p>
+         */
+        private void ensurePtyHelper(String loader) {
+            File binary = resolveLink(new File(LINK_PATH));
+            if (binary == null || !binary.isFile()) return;
+            ensurePtyHelper(binary, loader);
+        }
+
+        private void ensurePtyHelper(File binary, String loader) {
+            if (binary == null || !binary.isFile() || loader == null) return;
+
+            File target = new File(PTY_BIN_PATH);
+            String stamp = binaryStamp(binary);
+            if (target.isFile() && target.canExecute()
+                && stamp.equals(readTrimmed(new File(PTY_MARKER_PATH))))
+                return;
+
+            File dir = new File(LINK_DIR);
+            if (!dir.isDirectory() && !dir.mkdirs()) {
+                Logger.logWarn(LOG_TAG, "Could not create the directory for the terminal helper.");
+                return;
+            }
+
+            File temp = new File(PTY_BIN_PATH + ".new");
+            deleteQuietly(temp);
+            File parent = temp.getParentFile();
+            if (parent != null && !parent.isDirectory() && !parent.mkdirs()) {
+                Logger.logWarn(LOG_TAG, "Could not create the terminal helper directory " + parent);
+                return;
+            }
+            try {
+                if (!extractEmbeddedPty(binary, temp)) return;
+
+                CmdResult patch = patchInterpreter(temp, loader);
+                if (patch.exitCode != 0) {
+                    Logger.logWarn(LOG_TAG, "Could not patch the terminal helper: " + tail(patch.output, 200));
+                    return;
+                }
+
+                try {
+                    Os.chmod(temp.getAbsolutePath(), 0755);
+                } catch (Exception e) {
+                    Logger.logStackTraceWithMessage(LOG_TAG, "Could not make the terminal helper executable", e);
+                }
+
+                CmdResult verify = run(Arrays.asList(temp.getAbsolutePath(), "--version"), VERIFY_TIMEOUT_MS, false, null);
+                if (verify.exitCode != 0 || verify.output == null || !verify.output.contains("opencode-pty")) {
+                    Logger.logWarn(LOG_TAG, "The terminal helper does not run: " + tail(verify.output, 200));
+                    return;
+                }
+
+                deleteQuietly(target);
+                if (!temp.renameTo(target) && !copyFile(temp, target)) {
+                    Logger.logWarn(LOG_TAG, "Could not install the terminal helper.");
+                    return;
+                }
+                writeTextFileQuietly(new File(PTY_MARKER_PATH), stamp);
+            } catch (Exception e) {
+                Logger.logStackTraceWithMessage(LOG_TAG, "Could not prepare the terminal helper", e);
+            } finally {
+                deleteQuietly(temp);
+            }
+        }
+
+        /** Extract the embedded ELF that contains {@code usage: opencode-pty} into {@code output}. */
+        private static boolean extractEmbeddedPty(File source, File output) throws IOException {
+            byte[] marker = "usage: opencode-pty".getBytes("US-ASCII");
+            try (RandomAccessFile in = new RandomAccessFile(source, "r")) {
+                long length = in.length();
+                long markerOffset = findSequence(in, marker, 0, length);
+                if (markerOffset < 0) {
+                    Logger.logWarn(LOG_TAG, "The OpenCode binary does not contain the terminal helper.");
+                    return false;
+                }
+
+                long start = findEmbeddedElf(in, markerOffset, length);
+                if (start < 0) {
+                    Logger.logWarn(LOG_TAG, "Could not locate the start of the terminal helper.");
+                    return false;
+                }
+
+                long size = elfSize(in, start);
+                if (size <= 0 || start + size > length || markerOffset >= start + size) {
+                    Logger.logWarn(LOG_TAG, "The embedded terminal helper has an invalid ELF size.");
+                    return false;
+                }
+
+                in.seek(start);
+                try (OutputStream out = new FileOutputStream(output)) {
+                    byte[] buffer = new byte[64 * 1024];
+                    long left = size;
+                    while (left > 0) {
+                        int read = in.read(buffer, 0, (int) Math.min(buffer.length, left));
+                        if (read < 0) return false;
+                        out.write(buffer, 0, read);
+                        left -= read;
+                    }
+                }
+                return true;
+            }
+        }
+
+        /** Find the last valid ELF before the terminal helper marker. */
+        private static long findEmbeddedElf(RandomAccessFile in, long before, long length) throws IOException {
+            byte[] elf = {0x7f, 'E', 'L', 'F'};
+            int n = elf.length;
+            byte[] buffer = new byte[64 * 1024 + n];
+            long position = 0;
+            long found = -1;
+            while (position < before) {
+                int read = (int) Math.min(buffer.length, before - position);
+                in.seek(position);
+                in.readFully(buffer, 0, read);
+                for (int i = 0; i + n <= read; i++) {
+                    int j = 0;
+                    while (j < n && buffer[i + j] == elf[j]) j++;
+                    if (j != n) continue;
+
+                    long start = position + i;
+                    long size = elfSize(in, start);
+                    if (size > 0 && start + size <= length && before < start + size)
+                        found = start;
+                }
+                position += Math.max(1, read - n + 1);
+            }
+            return found;
+        }
+
+        /** @return the first occurrence of {@code needle} in the given range, or -1. */
+        private static long findSequence(RandomAccessFile in, byte[] needle, long from, long to) throws IOException {
+            int n = needle.length;
+            byte[] buffer = new byte[64 * 1024 + n];
+            long position = from;
+            while (position < to) {
+                int read = (int) Math.min(buffer.length, to - position);
+                in.seek(position);
+                in.readFully(buffer, 0, read);
+                for (int i = 0; i + n <= read; i++) {
+                    int j = 0;
+                    while (j < n && buffer[i + j] == needle[j]) j++;
+                    if (j == n) return position + i;
+                }
+                position += Math.max(1, read - n + 1);
+            }
+            return -1;
+        }
+
+        /** @return the file size described by the section headers of an ELF64 file, or -1. */
+        private static long elfSize(RandomAccessFile in, long start) throws IOException {
+            in.seek(start);
+            byte[] ident = new byte[4];
+            in.readFully(ident);
+            if (ident[0] != 0x7f || ident[1] != 'E' || ident[2] != 'L' || ident[3] != 'F') return -1;
+            in.seek(start + 4);
+            if (in.readUnsignedByte() != 2) return -1; // ELF64
+            if (in.readUnsignedByte() != 1) return -1; // little endian
+            in.seek(start + 40);
+            long sectionOffset = readLongLE(in);
+            in.seek(start + 58);
+            int sectionEntrySize = readShortLE(in);
+            int sectionCount = readShortLE(in);
+            if (sectionOffset <= 0 || sectionEntrySize <= 0 || sectionCount <= 0) return -1;
+            long size = sectionOffset + (long) sectionEntrySize * sectionCount;
+            if (size <= 0 || size > 128L * 1024 * 1024) return -1;
+            return size;
+        }
+
+        private static long readLongLE(RandomAccessFile in) throws IOException {
+            long value = 0;
+            for (int i = 0; i < 8; i++)
+                value |= ((long) in.readUnsignedByte()) << (8 * i);
+            return value;
+        }
+
+        private static int readShortLE(RandomAccessFile in) throws IOException {
+            return in.readUnsignedByte() | (in.readUnsignedByte() << 8);
         }
 
         private boolean patchelfWorks() {
@@ -1298,6 +1492,15 @@ public final class OpenCodeBootstrap {
             sb.append("# Never load the bionic preload of Termux into a glibc process.\n");
             sb.append("unset LD_PRELOAD\n");
             sb.append("unset LD_LIBRARY_PATH\n");
+            sb.append("\n");
+            sb.append("# The web terminal helper is a separate glibc binary that OpenCode extracts at\n");
+            sb.append("# run time. Use the copy the app patched for Android and keep its Unix socket\n");
+            sb.append("# path short and writable, because /tmp does not exist on Android.\n");
+            sb.append("PTY=\"$H/.opencode/bin/opencode-pty\"\n");
+            sb.append("[ -x \"$PTY\" ] && export OPENCODE_PTY_BIN=\"$PTY\"\n");
+            sb.append("PTYSOCK=\"$P/tmp/ocpty\"\n");
+            sb.append("mkdir -p \"$PTYSOCK\" 2>/dev/null\n");
+            sb.append("[ -d \"$PTYSOCK\" ] && export OPENCODE_PTY_SOCKET_DIR=\"$PTYSOCK\"\n");
             sb.append("\n");
             sb.append("# Keep the GitHub credentials of the gh CLI visible to the native runtime. Without\n");
             sb.append("# this the token is only available to interactive shells and GitHub access is\n");
