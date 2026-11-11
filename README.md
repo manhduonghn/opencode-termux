@@ -86,13 +86,15 @@ The full technical description, including the error matrix and the security trad
 - **No root, no proot** — only the Termux user space is used.
 - **Floating input bar** — a dedicated text field to type prompts into the full screen TUI.
 - **Keeps the device awake** — a wake lock is held while the agent is running.
-- **One file manager for everything** — the **folder button in the top bar** opens a single file manager for
-  `$HOME`, the shared device storage, SD cards and GitHub. Tap an entry to open it, or long press to
-  see all actions. Open a folder as a project, open files with other apps, share one or more entries
-  (folders are zipped automatically), rename, create, delete, search recursively, sort, bookmark
-  locations, compress/extract ZIP archives, edit text files and inspect detailed properties
-  (permissions, checksums, symlinks, APK and image metadata). The same screen grants storage access
-  and logs in to GitHub to list and clone repositories.
+- **One file manager for everything** — the **folder button in the top bar** opens a single full
+  screen file manager for `$HOME`, the shared device storage, SD cards and GitHub. It works like a
+  standard file manager: a locations drawer, list/grid view, a create button, breadcrumbs and
+  multi-select. Tap an entry to open it, or long press to see all actions. Open a folder as a
+  project, open files with other apps, share one or more entries (folders are zipped
+  automatically), rename, create, delete, search recursively, sort, bookmark locations,
+  compress/extract ZIP archives, edit text files and inspect detailed properties (permissions,
+  checksums, symlinks, APK and image metadata). The same screen grants storage access and logs in
+  to GitHub to list and clone repositories.
 - **Share sheet integration** — the app appears in the Android share sheet. Files shared to it are
   copied to `~/Downloads` and opened in the file manager.
 
@@ -187,9 +189,11 @@ device storage, an SD card and GitHub.
 - **⋮** opens the same actions for one entry: open, **Mở bằng…**, **Chỉnh sửa văn bản**, **Mở làm
   dự án**, **Chọn nhiều**, **Chia sẻ**, copy path, copy/move, rename, **Nén thành ZIP**, **Giải
   nén**, **Thông tin** and delete. Search results also offer **Mở thư mục chứa**.
-- **Vị trí** (the storage icon) jumps to `~`, the Termux files directory, internal storage, SD
-  cards, app data, `/`, and any folder saved as a bookmark. It also contains **GitHub** (login,
-  list repositories and clone) and the storage permission shortcuts.
+- **Vị trí** (the storage icon) opens the locations drawer with `~`, the Termux files directory,
+  internal storage, SD cards, app data, `/`, and any folder saved as a bookmark. It also contains
+  **GitHub** (login, list repositories and clone) and the storage permission shortcuts.
+- The **+** button creates a new folder or file in the current directory.
+- The **grid/list** button in the header switches the view; the choice is remembered.
 - **↑ / ⌂** navigate to the parent directory or back to `~`. The breadcrumb row jumps to any parent,
   and the path can be tapped for **Sao chép đường dẫn**, **Đi tới đường dẫn…**, **Vị trí** and
   bookmarks.

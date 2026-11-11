@@ -1,12 +1,15 @@
 package com.termux.app;
 
 import android.app.Activity;
+import android.app.Dialog;
 import android.content.ActivityNotFoundException;
 import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.graphics.Color;
+import android.graphics.drawable.ColorDrawable;
 import android.net.Uri;
 import android.os.Build;
 import android.os.StatFs;
@@ -16,6 +19,7 @@ import android.system.StructStat;
 import android.text.Editable;
 import android.text.InputType;
 import android.text.TextWatcher;
+import android.view.Gravity;
 import android.view.KeyEvent;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -25,15 +29,18 @@ import android.view.WindowManager;
 import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputMethodManager;
 import android.webkit.MimeTypeMap;
+import android.widget.AdapterView;
 import android.widget.BaseAdapter;
 import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.FrameLayout;
+import android.widget.GridView;
 import android.widget.HorizontalScrollView;
 import android.widget.ImageButton;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ListView;
+import android.widget.PopupMenu;
 import android.widget.ProgressBar;
 import android.widget.RadioButton;
 import android.widget.RadioGroup;
@@ -113,6 +120,7 @@ final class FileManagerDialog {
     private static final String PREF_DIRS_FIRST = "file_manager_dirs_first";
     private static final String PREF_RECURSIVE_SEARCH = "file_manager_recursive_search";
     private static final String PREF_BOOKMARKS = "file_manager_bookmarks";
+    private static final String PREF_GRID_MODE = "file_manager_grid_mode";
 
     private static final String FILE_PROVIDER_SUFFIX = ".fileprovider";
     private static final String SHARE_CACHE_DIR = "shared";
@@ -151,8 +159,9 @@ final class FileManagerDialog {
     private final SharedPreferences preferences;
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
 
-    private AlertDialog dialog;
+    private Dialog dialog;
     private ListView listView;
+    private GridView gridView;
     private TextView pathView;
     private TextView summaryView;
     private TextView emptyView;
@@ -163,6 +172,12 @@ final class FileManagerDialog {
     private ImageButton locationsButton;
     private ImageButton searchButton;
     private ImageButton moreButton;
+    private ImageButton closeButton;
+    private ImageButton viewModeButton;
+    private View drawer;
+    private View drawerScrim;
+    private LinearLayout drawerList;
+    private View fab;
     private HorizontalScrollView breadcrumbScroll;
     private LinearLayout breadcrumb;
     private View searchRow;
@@ -192,6 +207,7 @@ final class FileManagerDialog {
     private boolean selectionMode;
     private boolean showHidden;
     private boolean recursiveSearch;
+    private boolean gridMode;
     private boolean sortAscending;
     private boolean directoriesFirst;
     private int sortMode;
@@ -208,6 +224,7 @@ final class FileManagerDialog {
         this.preferences = activity.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
         this.showHidden = preferences.getBoolean(PREF_SHOW_HIDDEN, false);
         this.recursiveSearch = preferences.getBoolean(PREF_RECURSIVE_SEARCH, true);
+        this.gridMode = preferences.getBoolean(PREF_GRID_MODE, false);
         this.sortMode = preferences.getInt(PREF_SORT, SORT_NAME);
         this.sortAscending = preferences.getBoolean(PREF_SORT_ASCENDING, true);
         this.directoriesFirst = preferences.getBoolean(PREF_DIRS_FIRST, true);
@@ -247,6 +264,7 @@ final class FileManagerDialog {
             .inflate(R.layout.dialog_file_manager, null, false);
 
         listView = view.findViewById(R.id.managed_file_list);
+        gridView = view.findViewById(R.id.managed_file_grid);
         pathView = view.findViewById(R.id.managed_file_path);
         summaryView = view.findViewById(R.id.managed_file_summary);
         emptyView = view.findViewById(R.id.managed_file_empty);
@@ -257,6 +275,12 @@ final class FileManagerDialog {
         locationsButton = view.findViewById(R.id.managed_file_locations);
         searchButton = view.findViewById(R.id.managed_file_search);
         moreButton = view.findViewById(R.id.managed_file_more);
+        closeButton = view.findViewById(R.id.managed_file_close);
+        viewModeButton = view.findViewById(R.id.managed_file_view_mode);
+        drawer = view.findViewById(R.id.managed_file_drawer);
+        drawerScrim = view.findViewById(R.id.managed_file_drawer_scrim);
+        drawerList = view.findViewById(R.id.managed_file_drawer_list);
+        fab = view.findViewById(R.id.managed_file_fab);
         breadcrumbScroll = view.findViewById(R.id.managed_file_breadcrumb_scroll);
         breadcrumb = view.findViewById(R.id.managed_file_breadcrumb);
         searchRow = view.findViewById(R.id.managed_file_search_row);
@@ -272,7 +296,10 @@ final class FileManagerDialog {
 
         adapter = new EntryAdapter();
         listView.setAdapter(adapter);
-        listView.setOnItemClickListener((parent, item, position, id) -> {
+        gridView.setAdapter(adapter);
+        updateViewMode();
+
+        AdapterView.OnItemClickListener itemClick = (parent, item, position, id) -> {
             if (busy || loading) return;
             if (position < 0 || position >= entries.size()) return;
             Entry entry = entries.get(position);
@@ -283,8 +310,8 @@ final class FileManagerDialog {
             } else {
                 openFile(entry, false);
             }
-        });
-        listView.setOnItemLongClickListener((parent, item, position, id) -> {
+        };
+        AdapterView.OnItemLongClickListener itemLongClick = (parent, item, position, id) -> {
             if (busy || loading) return false;
             if (position < 0 || position >= entries.size()) return false;
             Entry entry = entries.get(position);
@@ -294,7 +321,11 @@ final class FileManagerDialog {
                 showEntryActions(entry);
             }
             return true;
-        });
+        };
+        listView.setOnItemClickListener(itemClick);
+        listView.setOnItemLongClickListener(itemLongClick);
+        gridView.setOnItemClickListener(itemClick);
+        gridView.setOnItemLongClickListener(itemLongClick);
 
         upButton.setOnClickListener(v -> {
             File parent = currentDirectory == null ? null : currentDirectory.getParentFile();
@@ -307,9 +338,13 @@ final class FileManagerDialog {
             copyPath(currentDirectory);
             return true;
         });
-        if (locationsButton != null) locationsButton.setOnClickListener(v -> showLocations());
+        if (locationsButton != null) locationsButton.setOnClickListener(v -> openDrawer());
         searchButton.setOnClickListener(v -> toggleSearch());
         moreButton.setOnClickListener(v -> showDirectoryActions());
+        if (closeButton != null) closeButton.setOnClickListener(v -> dismiss());
+        if (viewModeButton != null) viewModeButton.setOnClickListener(v -> toggleViewMode());
+        if (drawerScrim != null) drawerScrim.setOnClickListener(v -> closeDrawer());
+        if (fab != null) fab.setOnClickListener(v -> showCreateMenu());
 
         View searchClear = view.findViewById(R.id.managed_file_search_clear);
         if (searchClear != null) searchClear.setOnClickListener(v -> closeSearch());
@@ -350,19 +385,16 @@ final class FileManagerDialog {
         selectionMore.setOnClickListener(v -> showSelectionActions());
         selectionClose.setOnClickListener(v -> exitSelection());
 
-        MaterialAlertDialogBuilder builder = new MaterialAlertDialogBuilder(activity);
-        builder.setTitle(R.string.opencode_files_dialog_title);
-        builder.setView(view);
-        builder.setNegativeButton(R.string.opencode_files_close, null);
-        builder.setOnDismissListener(d -> {
+        dialog = new Dialog(activity, R.style.Theme_Opencode_FullScreenDialog);
+        dialog.setContentView(view);
+        dialog.setCanceledOnTouchOutside(false);
+        dialog.setOnDismissListener(d -> {
             loadGeneration++;
             searchGeneration++;
             executor.shutdownNow();
             FileManagerDialog current = activeDialog == null ? null : activeDialog.get();
             if (current == this) activeDialog = null;
         });
-
-        dialog = builder.create();
         dialog.setOnKeyListener((d, keyCode, event) -> {
             if (keyCode != KeyEvent.KEYCODE_BACK || event.getAction() != KeyEvent.ACTION_UP) {
                 return false;
@@ -372,6 +404,7 @@ final class FileManagerDialog {
         dialog.show();
         Window window = dialog.getWindow();
         if (window != null) {
+            window.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
             window.setLayout(WindowManager.LayoutParams.MATCH_PARENT,
                 WindowManager.LayoutParams.MATCH_PARENT);
         }
@@ -383,6 +416,10 @@ final class FileManagerDialog {
 
     /** Navigate up one directory instead of closing the dialog while it is possible. */
     private boolean handleBack() {
+        if (drawer != null && drawer.getVisibility() == View.VISIBLE) {
+            closeDrawer();
+            return true;
+        }
         if (selectionMode) {
             exitSelection();
             return true;
@@ -396,6 +433,167 @@ final class FileManagerDialog {
         if (parent == null) return false;
         navigateTo(parent);
         return true;
+    }
+
+    /* ==========================================================================================
+     * View mode, navigation drawer and create menu
+     * ========================================================================================== */
+
+    private void toggleViewMode() {
+        gridMode = !gridMode;
+        preferences.edit().putBoolean(PREF_GRID_MODE, gridMode).apply();
+        updateViewMode();
+    }
+
+    private void updateViewMode() {
+        if (listView != null) {
+            listView.setVisibility(gridMode ? View.GONE : View.VISIBLE);
+        }
+        if (gridView != null) {
+            gridView.setVisibility(gridMode ? View.VISIBLE : View.GONE);
+        }
+        if (viewModeButton != null) {
+            viewModeButton.setImageResource(gridMode ? R.drawable.ic_list : R.drawable.ic_grid);
+        }
+        if (adapter != null) adapter.notifyDataSetChanged();
+    }
+
+    private void openDrawer() {
+        if (drawer == null) return;
+        buildDrawer();
+        drawer.animate().cancel();
+        if (drawerScrim != null) drawerScrim.setVisibility(View.VISIBLE);
+        drawer.setVisibility(View.VISIBLE);
+        drawer.setTranslationX(-dp(320));
+        drawer.animate().translationX(0f).setDuration(180).start();
+    }
+
+    private void closeDrawer() {
+        if (drawer == null || drawer.getVisibility() != View.VISIBLE) return;
+        drawer.animate().cancel();
+        if (drawerScrim != null) drawerScrim.setVisibility(View.GONE);
+        drawer.animate().translationX(-Math.max(drawer.getWidth(), dp(300))).setDuration(160)
+            .withEndAction(() -> drawer.setVisibility(View.GONE)).start();
+    }
+
+    /** Rebuild the drawer so it always mirrors the volumes that are currently reachable. */
+    private void buildDrawer() {
+        if (drawerList == null) return;
+        drawerList.removeAllViews();
+
+        addDrawerItem(activity.getString(R.string.opencode_files_location_home),
+            home.getAbsolutePath(), R.drawable.ic_home, () -> navigateTo(home));
+        File filesDir = TermuxConstants.TERMUX_FILES_DIR;
+        if (filesDir != null && filesDir.isDirectory()) {
+            addDrawerItem(activity.getString(R.string.opencode_files_location_files),
+                filesDir.getAbsolutePath(), R.drawable.ic_folder, () -> navigateTo(filesDir));
+        }
+        File primary = StorageAccess.primaryRoot();
+        if (primary != null) {
+            addDrawerItem(activity.getString(R.string.opencode_files_location_internal),
+                primary.getAbsolutePath(), R.drawable.ic_storage, () -> navigateTo(primary));
+        }
+        for (File root : StorageAccess.volumeRoots(activity)) {
+            if (StorageAccess.isPrimaryRoot(root)) continue;
+            addDrawerItem(activity.getString(R.string.opencode_files_location_sd, root.getName()),
+                root.getAbsolutePath(), R.drawable.ic_storage, () -> navigateTo(root));
+        }
+        File dataDir = TermuxConstants.TERMUX_INTERNAL_PRIVATE_APP_DATA_DIR;
+        if (dataDir.isDirectory()) {
+            addDrawerItem(activity.getString(R.string.opencode_files_location_app_data),
+                dataDir.getAbsolutePath(), R.drawable.ic_folder, () -> navigateTo(dataDir));
+        }
+        addDrawerItem(activity.getString(R.string.opencode_files_location_root), "/",
+            R.drawable.ic_storage, () -> navigateTo(new File("/")));
+
+        if (!bookmarks.isEmpty()) {
+            addDrawerItem(activity.getString(R.string.opencode_files_bookmarks),
+                activity.getString(R.string.opencode_files_bookmarks_count, bookmarks.size()),
+                R.drawable.ic_star, this::showBookmarks);
+        }
+
+        addDrawerItem(activity.getString(R.string.opencode_files_github), null,
+            R.drawable.ic_github_branch, () -> listener.onOpenGitHub());
+        if (!StorageAccess.hasStoragePermission(activity)) {
+            addDrawerItem(activity.getString(R.string.opencode_files_storage_grant), null,
+                R.drawable.ic_storage, () -> listener.onManageStorage());
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R
+                && !StorageAccess.hasAllFilesAccess(activity)) {
+            addDrawerItem(activity.getString(R.string.opencode_files_storage_grant_sd), null,
+                R.drawable.ic_storage, () -> listener.onManageStorage());
+        }
+    }
+
+    private void addDrawerItem(String title, String subtitle, int iconRes, Runnable action) {
+        LinearLayout row = new LinearLayout(activity);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setClickable(true);
+        row.setFocusable(true);
+        row.setPadding(dp(20), dp(12), dp(20), dp(12));
+
+        android.util.TypedValue ripple = new android.util.TypedValue();
+        if (activity.getTheme().resolveAttribute(
+                android.R.attr.selectableItemBackground, ripple, true)) {
+            row.setBackgroundResource(ripple.resourceId);
+        }
+
+        ImageView icon = new ImageView(activity);
+        LinearLayout.LayoutParams iconParams = new LinearLayout.LayoutParams(dp(24), dp(24));
+        icon.setLayoutParams(iconParams);
+        icon.setImageResource(iconRes);
+        icon.setColorFilter(activity.getResources().getColor(R.color.github_muted));
+        row.addView(icon);
+
+        LinearLayout textColumn = new LinearLayout(activity);
+        textColumn.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout.LayoutParams columnParams = new LinearLayout.LayoutParams(
+            0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        columnParams.setMarginStart(dp(18));
+        textColumn.setLayoutParams(columnParams);
+
+        TextView titleView = new TextView(activity);
+        titleView.setText(title);
+        titleView.setTextSize(15f);
+        textColumn.addView(titleView);
+
+        if (subtitle != null && !subtitle.isEmpty()) {
+            TextView subtitleView = new TextView(activity);
+            subtitleView.setText(subtitle);
+            subtitleView.setTextSize(11f);
+            subtitleView.setTextColor(activity.getResources().getColor(R.color.github_muted));
+            subtitleView.setMaxLines(1);
+            subtitleView.setEllipsize(android.text.TextUtils.TruncateAt.MIDDLE);
+            textColumn.addView(subtitleView);
+        }
+
+        row.addView(textColumn);
+        row.setOnClickListener(v -> {
+            closeDrawer();
+            action.run();
+        });
+        drawerList.addView(row, new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+    }
+
+    private void showCreateMenu() {
+        if (fab == null) return;
+        PopupMenu menu = new PopupMenu(activity, fab);
+        menu.getMenu().add(0, 1, 0, R.string.opencode_files_new_folder);
+        menu.getMenu().add(0, 2, 1, R.string.opencode_files_new_file);
+        menu.setOnMenuItemClickListener(item -> {
+            switch (item.getItemId()) {
+                case 1:
+                    createFolder();
+                    return true;
+                case 2:
+                    createFile();
+                    return true;
+                default:
+                    return false;
+            }
+        });
+        menu.show();
     }
 
     /* ==========================================================================================
@@ -2330,10 +2528,12 @@ final class FileManagerDialog {
 
         @Override
         public View getView(int position, View convertView, ViewGroup parent) {
+            boolean grid = parent instanceof GridView;
             View view = convertView;
             if (view == null) {
-                view = LayoutInflater.from(activity)
-                    .inflate(R.layout.item_managed_file, parent, false);
+                view = LayoutInflater.from(activity).inflate(
+                    grid ? R.layout.item_managed_file_grid : R.layout.item_managed_file,
+                    parent, false);
             }
             final Entry entry = getItem(position);
             TextView name = view.findViewById(R.id.managed_file_name);

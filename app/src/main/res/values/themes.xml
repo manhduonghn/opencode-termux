@@ -27,5 +27,15 @@
         <item name="colorSecondaryVariant">@color/app_accent</item>
         <item name="colorOnSecondary">@color/app_surface</item>
     </style>
+    <!-- Full screen surface used by the unified file manager, so it behaves like an app screen
+         instead of a floating dialog. -->
+    <style name="Theme.Opencode.FullScreenDialog" parent="Theme.MaterialComponents.DayNight.Dialog">
+        <item name="windowNoTitle">true</item>
+        <item name="windowActionBar">false</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowIsFloating">false</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowAnimationStyle">@null</item>
+    </style>
 
 </resources>

@@ -167,6 +167,8 @@
     <string name="opencode_files_open_failed">Không mở được tệp</string>
     <string name="opencode_files_share">Chia sẻ</string>
     <string name="opencode_files_select_multiple">Chọn nhiều</string>
+    <string name="opencode_files_view_mode">Đổi kiểu xem</string>
+    <string name="opencode_files_new">Tạo mới</string>
     <string name="opencode_files_github">GitHub: đăng nhập &amp; clone</string>
     <string name="opencode_files_storage_grant">Cấp quyền bộ nhớ ngoài</string>
     <string name="opencode_files_storage_grant_sd">Cấp quyền truy cập thẻ SD</string>
@@ -382,6 +384,7 @@
     <string name="opencode_files_location_app_data">Dữ liệu ứng dụng Termux</string>
     <string name="opencode_files_location_root">Gốc hệ thống (/)</string>
     <string name="opencode_files_bookmarks">Yêu thích</string>
+    <string name="opencode_files_bookmarks_count">%1$d mục</string>
     <string name="opencode_files_bookmark_add">Thêm thư mục này vào yêu thích</string>
     <string name="opencode_files_bookmark_remove">Bỏ thư mục này khỏi yêu thích</string>
     <string name="opencode_files_bookmark_added">Đã thêm vào yêu thích</string>
