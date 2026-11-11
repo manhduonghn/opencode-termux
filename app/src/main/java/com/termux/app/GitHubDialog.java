@@ -74,7 +74,21 @@ final class GitHubDialog {
     private static final String DEVICE_CODE_URL = "https://github.com/login/device/code";
     private static final String ACCESS_TOKEN_URL = "https://github.com/login/oauth/access_token";
     private static final String DEVICE_VERIFY_URL = "https://github.com/login/device";
-    private static final String SCOPES = "repo read:org gist";
+    /**
+     * Ask for the full set of scopes that the GitHub CLI and Copilot can use. GitHub rejects the
+     * whole request with {@code invalid_scope} when a single unknown scope is sent, so only
+     * documented scopes are listed here.
+     */
+    private static final String SCOPES =
+        "repo workflow write:packages read:packages delete:packages security_events "
+            + "admin:repo_hook write:repo_hook read:repo_hook "
+            + "admin:org write:org read:org "
+            + "admin:public_key write:public_key read:public_key "
+            + "admin:gpg_key write:gpg_key read:gpg_key "
+            + "admin:ssh_signing_key write:ssh_signing_key read:ssh_signing_key "
+            + "gist notifications user read:user user:email user:follow "
+            + "project read:project delete_repo "
+            + "write:discussion read:discussion codespace copilot";
 
     private static final int MENU_CLONE = 1;
     private static final int MENU_COPY_URL = 2;
@@ -430,6 +444,9 @@ final class GitHubDialog {
                         hintView.setVisibility(View.VISIBLE);
                     }
                     setChip(R.string.opencode_github_chip_waiting, false);
+                    // Put the code on the clipboard before leaving for the browser, so the user
+                    // only has to paste it into the GitHub device page.
+                    copyText(device.userCode);
                     openExternal(device.verificationUri);
                 });
 

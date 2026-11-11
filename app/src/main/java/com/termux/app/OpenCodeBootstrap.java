@@ -219,6 +219,8 @@ public final class OpenCodeBootstrap {
     private static Installer sInstaller = null;
     /** True while the silent maintenance of the runtime runs in the background. */
     private static boolean sMaintenanceRunning = false;
+    /** Serializes the (rare) installation of ripgrep so that apt never runs twice for it. */
+    private static final Object sRipgrepLock = new Object();
     /** The listeners that want to know about the progress of the installation. */
     private static final List<InstallListener> sListeners = new CopyOnWriteArrayList<>();
     /** The callbacks that are waiting for the installation to finish. */
@@ -455,6 +457,24 @@ public final class OpenCodeBootstrap {
         return runtimeProblems().isEmpty();
     }
 
+    /**
+     * Make sure that ripgrep is installed in Termux.
+     *
+     * <p>The {@code glob} and {@code grep} tools of OpenCode need a working {@code rg} binary.
+     * The copy that OpenCode downloads is a glibc build for desktop Linux and cannot run on
+     * Android, so the Termux package is used instead. Without it every {@code glob} or
+     * {@code grep} call fails with {@code ripgrep execution failed}.</p>
+     *
+     * @return true when ripgrep was installed by this call, false when it was already present
+     *         or could not be installed.
+     */
+    public static boolean ensureRipgrep(Context context) {
+        if (isExecutable(new File(PREFIX + "/bin/rg"))) return false;
+        Installer installer = new Installer(context, false);
+        installer.logOnly = true;
+        return installer.installRipgrep();
+    }
+
     /** @return the version of OpenCode that is currently installed, or an empty string. */
     public static String getInstalledVersion() {
         return readTrimmed(new File(READY_MARKER_PATH));
@@ -564,7 +584,7 @@ public final class OpenCodeBootstrap {
             // 'termux-am' is needed by the 'oc-install' launcher, it asks the app to install
             // or update the runtime.
             setStage(OpenCodeInstallState.STAGE_APT_INSTALL, "Installing the helper packages...");
-            if (!aptInstall(Arrays.asList("glibc-runner", "patchelf", "tar", "termux-am")))
+            if (!aptInstall(Arrays.asList("glibc-runner", "patchelf", "tar", "termux-am", "ripgrep")))
                 Logger.logWarn(LOG_TAG, "Some of the helper packages could not be installed, continuing anyway.");
 
             // 'patchelf' links against libc++_shared.so, an old libc++ makes it die with
@@ -624,6 +644,7 @@ public final class OpenCodeBootstrap {
             restoreLauncher(new File(OPENCODE_BIN_PATH), buildOpenCodeLauncher());
             restoreLauncher(new File(OC_INSTALL_PATH), buildOcInstallLauncher());
             repairInterpreterIfNeeded(context);
+            installRipgrep();
             String loader = findGlibcLoader();
             if (loader != null) ensurePtyHelper(loader);
         }
@@ -654,6 +675,29 @@ public final class OpenCodeBootstrap {
             deleteQuietly(new File(APT_TMP_DIR));
             mTempSourcesOptions = null;
             return false;
+        }
+
+        /**
+         * Make sure that ripgrep is installed. The {@code glob} and {@code grep} tools of
+         * OpenCode use the {@code rg} binary of Termux, the bundled one is a glibc build that
+         * cannot run on Android.
+         *
+         * @return true when ripgrep was installed by this call.
+         */
+        private boolean installRipgrep() {
+            synchronized (sRipgrepLock) {
+                if (isExecutable(new File(PREFIX + "/bin/rg"))) return false;
+
+                status("Installing ripgrep so that the glob and grep tools work...");
+                if (aptInstall(Arrays.asList("ripgrep"))) return true;
+
+                // The package lists of an old installation may be missing or stale.
+                aptUpdate(false);
+                if (aptInstall(Arrays.asList("ripgrep"))) return true;
+
+                Logger.logWarn(LOG_TAG, "Could not install ripgrep, the glob and grep tools may fail.");
+                return false;
+            }
         }
 
         private boolean aptInstall(List<String> packages) {

@@ -91,6 +91,13 @@ public final class OpenCodeService {
             }
             clearTmpIfRequestedLocked(serviceStopped);
 
+            // The glob and grep tools of OpenCode use the ripgrep of Termux. Install it before
+            // the daemon starts; when it was just installed, restart a daemon that may still
+            // have cached the failed ripgrep lookup.
+            if (OpenCodeBootstrap.ensureRipgrep(appContext)) {
+                stopLocked(appContext);
+            }
+
             sStopped.set(false);
 
             Exception failure = null;
@@ -152,6 +159,10 @@ public final class OpenCodeService {
                 serviceStopped = stopLocked(appContext);
             }
             clearTmpIfRequestedLocked(serviceStopped);
+
+            if (OpenCodeBootstrap.ensureRipgrep(appContext)) {
+                stopLocked(appContext);
+            }
 
             try {
                 String output = OpenCodeCli.run(appContext, startTimeoutMs, "service", "start");
