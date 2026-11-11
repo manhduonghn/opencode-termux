@@ -2227,14 +2227,13 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
     }
 
     /**
-     * The single settings card opens the file manager for the Termux home directory. The same
-     * manager also exposes shared storage and GitHub, so those features no longer need their own
-     * settings cards.
+     * The folder button in the top bar opens the file manager. The same manager also exposes
+     * shared storage and GitHub, so those features no longer need their own settings cards.
      */
     private void configureFileManagerSettings() {
-        View row = findViewById(R.id.opencode_files_row);
-        if (row != null) {
-            row.setOnClickListener(v -> FileManagerDialog.show(this, fileManagerListener()));
+        View button = findViewById(R.id.opencode_web_files_button);
+        if (button != null) {
+            button.setOnClickListener(v -> FileManagerDialog.show(this, fileManagerListener()));
         }
     }
 

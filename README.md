@@ -86,7 +86,7 @@ The full technical description, including the error matrix and the security trad
 - **No root, no proot** — only the Termux user space is used.
 - **Floating input bar** — a dedicated text field to type prompts into the full screen TUI.
 - **Keeps the device awake** — a wake lock is held while the agent is running.
-- **One file manager for everything** — **Settings → Quản lý tệp** opens a single file manager for
+- **One file manager for everything** — the **folder button in the top bar** opens a single file manager for
   `$HOME`, the shared device storage, SD cards and GitHub. Tap an entry to open it, or long press to
   see all actions. Open a folder as a project, open files with other apps, share one or more entries
   (folders are zipped automatically), rename, create, delete, search recursively, sort, bookmark
@@ -155,7 +155,7 @@ agent receives it exactly like a prompt typed in a real terminal.
 OpenCode can open projects outside `$HOME`, for example in `/storage/emulated/0/Documents` or on
 an SD card.
 
-1. Open the gear menu → **Quản lý tệp**. This single entry opens the file manager for Termux,
+1. Tap the **folder button in the top bar**. This single entry opens the file manager for Termux,
    shared storage, SD cards and GitHub.
 2. Open **Vị trí** (or **⋮ → Cấp quyền bộ nhớ ngoài**) and grant access. On Android 11+, enable
    **All files access** for the app. This is required to read and write the root of an SD card. If
@@ -177,7 +177,7 @@ manager. If it still does not appear, fully close and reopen the app.
 ### File manager and the Android share sheet
 
 Repositories cloned from the GitHub screen and other files written to `$HOME` accumulate over
-time. Open the gear menu → **Quản lý tệp** to browse the Termux home directory, the shared
+time. Tap the **folder button in the top bar** to browse the Termux home directory, the shared
 device storage, an SD card and GitHub.
 
 - **Chạm** (tap) a folder to enter it, or a file to open it with a compatible app.
