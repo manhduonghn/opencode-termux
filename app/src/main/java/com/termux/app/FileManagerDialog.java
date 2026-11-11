@@ -82,12 +82,13 @@ import java.util.zip.ZipOutputStream;
  * A file manager for the files that the user can reach from Termux: the Termux home directory,
  * the shared device storage and an SD card.
  *
- * <p>The manager can browse directories, open files with other apps, share one or more entries
- * through the Android share sheet (folders are zipped first), create, rename and delete entries
- * and inspect their size and timestamps. The same screen grants shared-storage access and opens
- * the GitHub login and clone screen. Files that Termux itself needs ({@code $PREFIX},
- * {@code ~/.opencode}, the volume roots) cannot be deleted, and symlinks are never followed while
- * deleting or zipping.</p>
+ * <p>The manager can browse directories, open text and code files in a built-in editor
+ * modelled after Acode, open other files with other apps, share one or more entries
+ * through the Android share sheet (folders are zipped first), create, rename and delete
+ * entries and inspect their size and timestamps. The same screen grants shared-storage
+ * access and opens the GitHub login and clone screen. Files that Termux itself needs
+ * ({@code $PREFIX}, {@code ~/.opencode}, the volume roots) cannot be deleted, and symlinks
+ * are never followed while deleting or zipping.</p>
  */
 final class FileManagerDialog {
 
@@ -295,7 +296,7 @@ final class FileManagerDialog {
             } else if (entry.file.isDirectory()) {
                 navigateTo(entry.file);
             } else {
-                openFile(entry, false);
+                openEntry(entry);
             }
         };
         AdapterView.OnItemLongClickListener itemLongClick = (parent, item, position, id) -> {
@@ -1059,14 +1060,20 @@ final class FileManagerDialog {
             labels.add(activity.getString(R.string.opencode_files_open_project));
             actions.add(() -> openProject(entry));
         } else {
+            // Like Acode: text and code files open in the built-in viewer, everything else
+            // is handed to another app.
+            if (FileManagerUtils.isTextFile(entry.file)) {
+                labels.add(activity.getString(R.string.opencode_files_open_in_app));
+                actions.add(() -> viewCode(entry, false));
+                if (!entry.symlink) {
+                    labels.add(activity.getString(R.string.opencode_files_edit_text));
+                    actions.add(() -> viewCode(entry, true));
+                }
+            }
             labels.add(activity.getString(R.string.opencode_files_open_file));
             actions.add(() -> openFile(entry, false));
             labels.add(activity.getString(R.string.opencode_files_open_with));
             actions.add(() -> openFile(entry, true));
-            if (!entry.symlink && FileManagerUtils.isTextFile(entry.file)) {
-                labels.add(activity.getString(R.string.opencode_files_edit_text));
-                actions.add(() -> editText(entry));
-            }
         }
 
         if (entry.relativePath != null) {
@@ -1117,13 +1124,22 @@ final class FileManagerDialog {
         }
     }
 
-    private void editText(Entry entry) {
-        if (entry.symlink) {
-            toast(R.string.opencode_files_editor_symlink);
-            return;
+    /** Open the tapped file: text and code files go to the built-in viewer, others to an app. */
+    private void openEntry(Entry entry) {
+        if (FileManagerUtils.isTextFile(entry.file)) {
+            viewCode(entry, false);
+        } else {
+            openFile(entry, false);
         }
-        boolean writable = isSafeToModify(entry.file) && entry.file.canWrite();
-        TextEditorDialog.show(activity, entry.file, writable, file -> reload());
+    }
+
+    /**
+     * Show the file in the built-in code viewer. A symbolic link is shown read-only, and
+     * the same safety rules as before decide whether editing is allowed.
+     */
+    private void viewCode(Entry entry, boolean startEditing) {
+        boolean writable = !entry.symlink && isSafeToModify(entry.file) && entry.file.canWrite();
+        CodeViewerDialog.show(activity, entry.file, writable, startEditing, file -> reload());
     }
 
     private void openProject(Entry entry) {
