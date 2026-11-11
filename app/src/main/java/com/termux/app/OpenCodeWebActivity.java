@@ -126,6 +126,8 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
     private Button mStorageGrantButton;
     private boolean mStorageSetupRunning;
     private boolean mStorageLegacyFallbackRequested;
+    /** Set when the file manager entry triggered the storage permission flow. */
+    private boolean mOpenFileManagerAfterStorage;
 
     @Nullable
     private ValueCallback<Uri[]> mFilePathCallback;
@@ -2227,14 +2229,28 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
     }
 
     /**
-     * The folder button in the top bar opens the file manager. The same manager also exposes
-     * shared storage and GitHub, so those features no longer need their own settings cards.
+     * The folder button in the top bar opens the file manager. Storage access is requested first
+     * when it is still missing, and GitHub has its own button in the top bar.
      */
     private void configureFileManagerSettings() {
-        View button = findViewById(R.id.opencode_web_files_button);
-        if (button != null) {
-            button.setOnClickListener(v -> FileManagerDialog.show(this, fileManagerListener()));
+        View files = findViewById(R.id.opencode_web_files_button);
+        if (files != null) {
+            files.setOnClickListener(v -> openFileManager());
         }
+        View github = findViewById(R.id.opencode_web_github_button);
+        if (github != null) {
+            github.setOnClickListener(v -> showGitHubDialog());
+        }
+    }
+
+    /** Open the file manager, asking for storage access first when it has not been granted. */
+    private void openFileManager() {
+        if (!StorageAccess.hasStoragePermission(this)) {
+            mOpenFileManagerAfterStorage = true;
+            onStorageActionClicked();
+            return;
+        }
+        FileManagerDialog.show(this, fileManagerListener());
     }
 
     /** The callbacks that the file manager needs from the activity. */
@@ -2248,11 +2264,6 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
             @Override
             public void onManageStorage() {
                 onStorageActionClicked();
-            }
-
-            @Override
-            public void onOpenGitHub() {
-                showGitHubDialog();
             }
         };
     }
@@ -2506,6 +2517,10 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
             }
             runStorageSetup();
             FileManagerDialog.refreshActive();
+            if (mOpenFileManagerAfterStorage) {
+                mOpenFileManagerAfterStorage = false;
+                openFileManager();
+            }
             return;
         }
 
@@ -2519,6 +2534,7 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
         }
 
         mStorageLegacyFallbackRequested = false;
+        mOpenFileManagerAfterStorage = false;
         updateStorageUi();
         android.widget.Toast.makeText(this, R.string.opencode_storage_denied,
             android.widget.Toast.LENGTH_LONG).show();

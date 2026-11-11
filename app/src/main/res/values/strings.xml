@@ -169,7 +169,6 @@
     <string name="opencode_files_select_multiple">Chọn nhiều</string>
     <string name="opencode_files_view_mode">Đổi kiểu xem</string>
     <string name="opencode_files_new">Tạo mới</string>
-    <string name="opencode_files_github">GitHub: đăng nhập &amp; clone</string>
     <string name="opencode_files_storage_grant">Cấp quyền bộ nhớ ngoài</string>
     <string name="opencode_files_storage_grant_sd">Cấp quyền truy cập thẻ SD</string>
     <string name="opencode_files_share_preparing">Đang chuẩn bị chia sẻ…</string>
@@ -208,9 +207,6 @@
     <string name="opencode_files_sort_name">Theo tên</string>
     <string name="opencode_files_sort_size">Theo dung lượng</string>
     <string name="opencode_files_sort_modified">Theo thời gian sửa</string>
-    <string name="opencode_files_search">Tìm kiếm</string>
-    <string name="opencode_files_search_close">Đóng tìm kiếm</string>
-    <string name="opencode_files_search_hint">Tìm trong thư mục này</string>
     <string name="opencode_files_select_all">Chọn tất cả</string>
     <string name="opencode_files_go_home">Về thư mục Termux</string>
     <string name="opencode_files_go_internal">Bộ nhớ trong</string>
@@ -399,7 +395,6 @@
     <string name="opencode_files_sort_dirs_first">Thư mục trước</string>
     <string name="opencode_files_sort_type">Theo loại</string>
     <string name="opencode_files_sort_apply">Áp dụng</string>
-    <string name="opencode_files_search_recursive">Tìm trong thư mục con</string>
     <string name="opencode_files_searching">Đang tìm…</string>
     <string name="opencode_files_search_results">%1$d kết quả</string>
     <string name="opencode_files_search_results_free">%1$d kết quả · máy còn trống %2$s</string>

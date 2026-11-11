@@ -23,16 +23,17 @@
             android:orientation="horizontal">
 
             <ImageButton
-                android:id="@+id/managed_file_close"
+                android:id="@+id/managed_file_locations"
                 android:layout_width="40dp"
                 android:layout_height="40dp"
                 android:background="?attr/selectableItemBackgroundBorderless"
-                android:contentDescription="@string/opencode_files_close"
+                android:contentDescription="@string/opencode_files_locations"
                 android:padding="10dp"
-                android:src="@drawable/ic_close"
+                android:src="@drawable/ic_menu"
                 app:tint="@color/github_muted" />
 
             <TextView
+                android:id="@+id/managed_file_title"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_marginStart="6dp"
@@ -51,6 +52,26 @@
                 android:contentDescription="@string/opencode_files_view_mode"
                 android:padding="10dp"
                 android:src="@drawable/ic_grid"
+                app:tint="@color/github_muted" />
+
+            <ImageButton
+                android:id="@+id/managed_file_more"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/opencode_files_more"
+                android:padding="10dp"
+                android:src="@drawable/ic_more"
+                app:tint="@color/github_muted" />
+
+            <ImageButton
+                android:id="@+id/managed_file_close"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/opencode_files_close"
+                android:padding="10dp"
+                android:src="@drawable/ic_close"
                 app:tint="@color/github_muted" />
         </LinearLayout>
 
@@ -97,36 +118,6 @@
                 android:textColor="@color/github_muted"
                 android:textSize="12sp"
                 android:textStyle="bold" />
-
-            <ImageButton
-                android:id="@+id/managed_file_locations"
-                android:layout_width="40dp"
-                android:layout_height="40dp"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:contentDescription="@string/opencode_files_locations"
-                android:padding="9dp"
-                android:src="@drawable/ic_storage"
-                app:tint="@color/github_muted" />
-
-            <ImageButton
-                android:id="@+id/managed_file_search"
-                android:layout_width="40dp"
-                android:layout_height="40dp"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:contentDescription="@string/opencode_files_search"
-                android:padding="10dp"
-                android:src="@drawable/ic_search"
-                app:tint="@color/github_muted" />
-
-            <ImageButton
-                android:id="@+id/managed_file_more"
-                android:layout_width="40dp"
-                android:layout_height="40dp"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:contentDescription="@string/opencode_files_more"
-                android:padding="10dp"
-                android:src="@drawable/ic_more"
-                app:tint="@color/github_muted" />
         </LinearLayout>
 
         <!-- Breadcrumbs for quick navigation between path components -->
@@ -146,52 +137,6 @@
                 android:paddingStart="4dp"
                 android:paddingEnd="4dp" />
         </HorizontalScrollView>
-
-        <!-- Search field, only visible while searching -->
-        <LinearLayout
-            android:id="@+id/managed_file_search_row"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:gravity="center_vertical"
-            android:orientation="horizontal"
-            android:visibility="gone">
-
-            <EditText
-                android:id="@+id/managed_file_search_input"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:hint="@string/opencode_files_search_hint"
-                android:imeOptions="actionSearch"
-                android:inputType="text"
-                android:maxLines="1"
-                android:paddingStart="8dp"
-                android:paddingTop="4dp"
-                android:paddingEnd="8dp"
-                android:paddingBottom="4dp"
-                android:textSize="14sp" />
-
-            <CheckBox
-                android:id="@+id/managed_file_search_recursive"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:minWidth="0dp"
-                android:paddingStart="2dp"
-                android:paddingEnd="2dp"
-                android:text="@string/opencode_files_search_recursive"
-                android:textColor="@color/github_muted"
-                android:textSize="11sp" />
-
-            <ImageButton
-                android:id="@+id/managed_file_search_clear"
-                android:layout_width="40dp"
-                android:layout_height="40dp"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:contentDescription="@string/opencode_files_search_close"
-                android:padding="10dp"
-                android:src="@drawable/ic_close"
-                app:tint="@color/github_muted" />
-        </LinearLayout>
 
         <!-- Selection toolbar, only visible in selection mode -->
         <LinearLayout

@@ -87,14 +87,14 @@ The full technical description, including the error matrix and the security trad
 - **Floating input bar** — a dedicated text field to type prompts into the full screen TUI.
 - **Keeps the device awake** — a wake lock is held while the agent is running.
 - **One file manager for everything** — the **folder button in the top bar** opens a single full
-  screen file manager for `$HOME`, the shared device storage, SD cards and GitHub. It works like a
+  screen file manager for `$HOME` and the shared device storage. It works like a
   standard file manager: a locations drawer, list/grid view, a create button, breadcrumbs and
-  multi-select. Tap an entry to open it; long press starts multi-select, and the ⋮ button shows all
-  actions. Open a folder as a project, open files with other apps, share one or more entries (folders are zipped
-  automatically), rename, create, delete, search recursively, sort, bookmark locations,
-  compress/extract ZIP archives, edit text files and inspect detailed properties (permissions,
-  checksums, symlinks, APK and image metadata). The same screen grants storage access and logs in
-  to GitHub to list and clone repositories.
+  multi-select. Opening it asks for storage access first when it is still missing. Tap an entry to
+  open it; long press starts multi-select, and the ⋮ button shows all actions. Open a folder as a
+  project, open files with other apps, share one or more entries (folders are zipped
+  automatically), rename, create, delete, sort, bookmark locations, compress/extract ZIP archives,
+  edit text files and inspect detailed properties (permissions, checksums, symlinks, APK and image
+  metadata). The **GitHub button** in the same toolbar logs in and lists repositories to clone.
 - **Share sheet integration** — the app appears in the Android share sheet. Files shared to it are
   copied to `~/Downloads` and opened in the file manager.
 
@@ -157,13 +157,13 @@ agent receives it exactly like a prompt typed in a real terminal.
 OpenCode can open projects outside `$HOME`, for example in `/storage/emulated/0/Documents` or on
 an SD card.
 
-1. Tap the **folder button in the top bar**. This single entry opens the file manager for Termux,
-   shared storage, SD cards and GitHub.
-2. Open **Vị trí** (or **⋮ → Cấp quyền bộ nhớ ngoài**) and grant access. On Android 11+, enable
-   **All files access** for the app. This is required to read and write the root of an SD card. If
-   it is denied, the app falls back to the legacy storage permission, which still covers the primary
-   shared storage. On Android 10 and lower the normal storage permission is enough, including for
-   an SD card.
+1. Tap the **folder button in the top bar**. If storage access has not been granted yet, the app
+   asks for it first and then opens the file manager for Termux and shared storage. The **GitHub
+   button** next to it opens the GitHub login and clone screen.
+2. Grant access when asked. On Android 11+, enable **All files access** for the app. This is
+   required to read and write the root of an SD card. If it is denied, the app falls back to the
+   legacy storage permission, which still covers the primary shared storage. On Android 10 and
+   lower the normal storage permission is enough, including for an SD card.
 3. The app creates `~/storage/shared` (primary storage) and `~/storage/sdcard1`,
    `~/storage/sdcard2`, … (additional volumes).
 4. In the file manager, open **Vị trí → Bộ nhớ trong** or **Thẻ SD**, browse to the project folder
@@ -178,9 +178,9 @@ manager. If it still does not appear, fully close and reopen the app.
 
 ### File manager and the Android share sheet
 
-Repositories cloned from the GitHub screen and other files written to `$HOME` accumulate over
-time. Tap the **folder button in the top bar** to browse the Termux home directory, the shared
-device storage, an SD card and GitHub.
+Repositories cloned from the GitHub button and other files written to `$HOME` accumulate over
+time. Tap the **folder button in the top bar** to browse the Termux home directory and the shared
+device storage. Opening the manager asks for storage access first when it is still missing.
 
 - **Chạm** (tap) a folder to enter it, or a file to open it with a compatible app.
 - **Nhấn giữ** (long press) an entry to start multi-select, like a standard file manager. The
@@ -188,18 +188,18 @@ device storage, an SD card and GitHub.
   full action menu.
 - **⋮** opens the same actions for one entry: open, **Mở bằng…**, **Chỉnh sửa văn bản**, **Mở làm
   dự án**, **Chọn nhiều**, **Chia sẻ**, copy path, copy/move, rename, **Nén thành ZIP**, **Giải
-  nén**, **Thông tin** and delete. Search results also offer **Mở thư mục chứa**.
-- **Vị trí** (the storage icon) opens the locations drawer with `~`, the Termux files directory,
-  internal storage, SD cards, app data, `/`, and any folder saved as a bookmark. It also contains
-  **GitHub** (login, list repositories and clone) and the storage permission shortcuts.
+  nén**, **Thông tin** and delete.
+- **Vị trí** (the menu icon in the header) opens the locations drawer with `~`, the Termux files
+  directory, internal storage, SD cards, app data, `/`, and any folder saved as a bookmark. It also
+  contains the storage permission shortcuts. GitHub has its own button in the main toolbar.
 - The **+** button creates a new folder or file in the current directory.
 - The **grid/list** button in the header switches the view; the choice is remembered.
 - **↑ / ⌂** navigate to the parent directory or back to `~`. The breadcrumb row jumps to any parent,
   and the path can be tapped for **Sao chép đường dẫn**, **Đi tới đường dẫn…**, **Vị trí** and
   bookmarks.
-- The toolbar also contains search (with **Tìm trong thư mục con** for a recursive search), a
-  hidden-files toggle, sorting (name, size, modification time or type; ascending/descending;
-  folders first) and **Thư mục mới** / **Tệp mới**.
+- The **⋮** button in the header opens the directory actions: new folder, new file, compress the
+  current folder, hidden-files toggle, sorting (name, size, modification time or type;
+  ascending/descending; folders first) and **Chọn tất cả**.
 - **Thông tin** shows size and recursive contents, modification time, owner, POSIX mode (with a
   chmod editor), SELinux context, symlink target, MD5/SHA-1/SHA-256 checksums, and APK or image
   metadata. The whole report can be copied.

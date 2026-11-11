@@ -16,9 +16,7 @@ import android.os.StatFs;
 import android.system.Os;
 import android.system.OsConstants;
 import android.system.StructStat;
-import android.text.Editable;
 import android.text.InputType;
-import android.text.TextWatcher;
 import android.view.Gravity;
 import android.view.KeyEvent;
 import android.view.LayoutInflater;
@@ -26,7 +24,6 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.view.Window;
 import android.view.WindowManager;
-import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputMethodManager;
 import android.webkit.MimeTypeMap;
 import android.widget.AdapterView;
@@ -102,10 +99,6 @@ final class FileManagerDialog {
         /** Ask the activity to grant or refresh shared-storage access. */
         default void onManageStorage() {
         }
-
-        /** Ask the activity to open the GitHub login and clone screen. */
-        default void onOpenGitHub() {
-        }
     }
 
     /** Receives a validated name from a rename/create dialog. */
@@ -163,6 +156,7 @@ final class FileManagerDialog {
     private ListView listView;
     private GridView gridView;
     private TextView pathView;
+    private TextView titleView;
     private TextView summaryView;
     private TextView emptyView;
     private ProgressBar progressBar;
@@ -170,7 +164,6 @@ final class FileManagerDialog {
     private ImageButton homeButton;
     private ImageButton refreshButton;
     private ImageButton locationsButton;
-    private ImageButton searchButton;
     private ImageButton moreButton;
     private ImageButton closeButton;
     private ImageButton viewModeButton;
@@ -180,9 +173,6 @@ final class FileManagerDialog {
     private View fab;
     private HorizontalScrollView breadcrumbScroll;
     private LinearLayout breadcrumb;
-    private View searchRow;
-    private EditText searchInput;
-    private CheckBox searchRecursive;
     private View selectionBar;
     private TextView selectionCount;
     private ImageButton selectionShare;
@@ -266,6 +256,7 @@ final class FileManagerDialog {
         listView = view.findViewById(R.id.managed_file_list);
         gridView = view.findViewById(R.id.managed_file_grid);
         pathView = view.findViewById(R.id.managed_file_path);
+        titleView = view.findViewById(R.id.managed_file_title);
         summaryView = view.findViewById(R.id.managed_file_summary);
         emptyView = view.findViewById(R.id.managed_file_empty);
         progressBar = view.findViewById(R.id.managed_file_progress);
@@ -273,7 +264,6 @@ final class FileManagerDialog {
         homeButton = view.findViewById(R.id.managed_file_home);
         refreshButton = view.findViewById(R.id.managed_file_refresh);
         locationsButton = view.findViewById(R.id.managed_file_locations);
-        searchButton = view.findViewById(R.id.managed_file_search);
         moreButton = view.findViewById(R.id.managed_file_more);
         closeButton = view.findViewById(R.id.managed_file_close);
         viewModeButton = view.findViewById(R.id.managed_file_view_mode);
@@ -283,9 +273,6 @@ final class FileManagerDialog {
         fab = view.findViewById(R.id.managed_file_fab);
         breadcrumbScroll = view.findViewById(R.id.managed_file_breadcrumb_scroll);
         breadcrumb = view.findViewById(R.id.managed_file_breadcrumb);
-        searchRow = view.findViewById(R.id.managed_file_search_row);
-        searchInput = view.findViewById(R.id.managed_file_search_input);
-        searchRecursive = view.findViewById(R.id.managed_file_search_recursive);
         selectionBar = view.findViewById(R.id.managed_file_selection_bar);
         selectionCount = view.findViewById(R.id.managed_file_selection_count);
         selectionShare = view.findViewById(R.id.managed_file_selection_share);
@@ -341,45 +328,11 @@ final class FileManagerDialog {
             return true;
         });
         if (locationsButton != null) locationsButton.setOnClickListener(v -> openDrawer());
-        searchButton.setOnClickListener(v -> toggleSearch());
         moreButton.setOnClickListener(v -> showDirectoryActions());
         if (closeButton != null) closeButton.setOnClickListener(v -> dismiss());
         if (viewModeButton != null) viewModeButton.setOnClickListener(v -> toggleViewMode());
         if (drawerScrim != null) drawerScrim.setOnClickListener(v -> closeDrawer());
         if (fab != null) fab.setOnClickListener(v -> showCreateMenu());
-
-        View searchClear = view.findViewById(R.id.managed_file_search_clear);
-        if (searchClear != null) searchClear.setOnClickListener(v -> closeSearch());
-        if (searchRecursive != null) {
-            searchRecursive.setChecked(recursiveSearch);
-            searchRecursive.setOnCheckedChangeListener((button, checked) -> {
-                recursiveSearch = checked;
-                preferences.edit().putBoolean(PREF_RECURSIVE_SEARCH, checked).apply();
-                if (!query.trim().isEmpty()) rebuildVisibleEntries();
-            });
-        }
-        searchInput.addTextChangedListener(new TextWatcher() {
-            @Override
-            public void beforeTextChanged(CharSequence s, int start, int count, int after) {
-            }
-
-            @Override
-            public void onTextChanged(CharSequence s, int start, int before, int count) {
-            }
-
-            @Override
-            public void afterTextChanged(Editable s) {
-                query = s == null ? "" : s.toString();
-                rebuildVisibleEntries();
-            }
-        });
-        searchInput.setOnEditorActionListener((v, actionId, event) -> {
-            if (actionId == EditorInfo.IME_ACTION_SEARCH) {
-                hideKeyboard();
-                return true;
-            }
-            return false;
-        });
 
         selectionShare.setOnClickListener(v -> shareSelectedEntries());
         selectionDelete.setOnClickListener(v -> confirmDeleteSelection());
@@ -424,10 +377,6 @@ final class FileManagerDialog {
         }
         if (selectionMode) {
             exitSelection();
-            return true;
-        }
-        if (searchRow != null && searchRow.getVisibility() == View.VISIBLE) {
-            closeSearch();
             return true;
         }
         if (currentDirectory == null) return false;
@@ -514,8 +463,6 @@ final class FileManagerDialog {
                 R.drawable.ic_star, this::showBookmarks);
         }
 
-        addDrawerItem(activity.getString(R.string.opencode_files_github), null,
-            R.drawable.ic_github_branch, () -> listener.onOpenGitHub());
         if (!StorageAccess.hasStoragePermission(activity)) {
             addDrawerItem(activity.getString(R.string.opencode_files_storage_grant), null,
                 R.drawable.ic_storage, () -> listener.onManageStorage());
@@ -615,7 +562,6 @@ final class FileManagerDialog {
         searchQuery = "";
         searchResults.clear();
         exitSelection();
-        closeSearch();
         updatePath();
         reload();
     }
@@ -635,6 +581,11 @@ final class FileManagerDialog {
         pathView.setText(display);
         pathView.setContentDescription(activity.getString(
             R.string.opencode_files_path_description, path));
+        if (titleView != null) {
+            String name = currentDirectory.getName();
+            titleView.setText(name == null || name.isEmpty()
+                ? activity.getString(R.string.opencode_files_dialog_title) : name);
+        }
         if (upButton != null) upButton.setEnabled(currentDirectory.getParentFile() != null);
         if (homeButton != null) homeButton.setEnabled(!path.equals(homePath));
         updateBreadcrumbs(path, homePath);
@@ -1004,7 +955,6 @@ final class FileManagerDialog {
 
     private void setControlsEnabled(boolean enabled) {
         if (refreshButton != null) refreshButton.setEnabled(enabled && !busy);
-        if (searchButton != null) searchButton.setEnabled(enabled && !busy);
         if (locationsButton != null) locationsButton.setEnabled(enabled && !busy);
         if (moreButton != null) moreButton.setEnabled(enabled && !busy);
         if (upButton != null) {
@@ -1067,7 +1017,6 @@ final class FileManagerDialog {
         }
         boolean available = !active && !busy && !loading;
         if (moreButton != null) moreButton.setEnabled(available);
-        if (searchButton != null) searchButton.setEnabled(available);
         if (locationsButton != null) locationsButton.setEnabled(available);
         if (refreshButton != null) refreshButton.setEnabled(available);
         if (selectionMore != null) selectionMore.setEnabled(!busy);
@@ -1551,8 +1500,6 @@ final class FileManagerDialog {
             actions.add(this::pasteClipboard);
         }
 
-        labels.add(activity.getString(R.string.opencode_files_github));
-        actions.add(() -> listener.onOpenGitHub());
         if (!StorageAccess.hasStoragePermission(activity)) {
             labels.add(activity.getString(R.string.opencode_files_storage_grant));
             actions.add(() -> listener.onManageStorage());
@@ -1598,9 +1545,6 @@ final class FileManagerDialog {
             actions.add(() -> compressEntries(Collections.singletonList(
                 new Entry(currentDirectory))));
         }
-        labels.add(activity.getString(searchRow != null && searchRow.getVisibility() == View.VISIBLE
-            ? R.string.opencode_files_search_close : R.string.opencode_files_search));
-        actions.add(this::toggleSearch);
         labels.add(activity.getString(showHidden
             ? R.string.opencode_files_hide_hidden : R.string.opencode_files_show_hidden));
         actions.add(this::toggleHidden);
@@ -1655,8 +1599,6 @@ final class FileManagerDialog {
         labels.add(activity.getString(R.string.opencode_files_location_root));
         actions.add(() -> navigateTo(new File("/")));
 
-        labels.add(activity.getString(R.string.opencode_files_github));
-        actions.add(() -> listener.onOpenGitHub());
         if (!StorageAccess.hasStoragePermission(activity)) {
             labels.add(activity.getString(R.string.opencode_files_storage_grant));
             actions.add(() -> listener.onManageStorage());
@@ -2362,47 +2304,11 @@ final class FileManagerDialog {
             .show();
     }
 
-    private void toggleSearch() {
-        if (searchRow == null) return;
-        if (searchRow.getVisibility() == View.VISIBLE) {
-            closeSearch();
-            return;
-        }
-        searchRow.setVisibility(View.VISIBLE);
-        searchInput.requestFocus();
-        showKeyboard(searchInput);
-        if (searchButton != null) {
-            searchButton.setImageResource(R.drawable.ic_close);
-        }
-    }
-
-    private void closeSearch() {
-        if (searchRow == null || searchRow.getVisibility() != View.VISIBLE) return;
-        searchRow.setVisibility(View.GONE);
-        if (searchInput != null) searchInput.setText("");
-        query = "";
-        if (searchButton != null) searchButton.setImageResource(R.drawable.ic_search);
-        hideKeyboard();
-        rebuildVisibleEntries();
-    }
-
     private void showKeyboard(View view) {
         try {
             InputMethodManager manager = (InputMethodManager)
                 activity.getSystemService(Context.INPUT_METHOD_SERVICE);
             if (manager != null) manager.showSoftInput(view, InputMethodManager.SHOW_IMPLICIT);
-        } catch (Throwable ignored) {
-            // The keyboard is optional.
-        }
-    }
-
-    private void hideKeyboard() {
-        try {
-            InputMethodManager manager = (InputMethodManager)
-                activity.getSystemService(Context.INPUT_METHOD_SERVICE);
-            if (manager != null && searchInput != null) {
-                manager.hideSoftInputFromWindow(searchInput.getWindowToken(), 0);
-            }
         } catch (Throwable ignored) {
             // The keyboard is optional.
         }
