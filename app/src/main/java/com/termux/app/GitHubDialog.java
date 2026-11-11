@@ -290,6 +290,7 @@ final class GitHubDialog {
     }
 
     private void showLoggedOut() {
+        hideLoginDetails();
         if (installCard != null) installCard.setVisibility(View.GONE);
         if (loginButton != null) {
             loginButton.setVisibility(View.VISIBLE);
@@ -307,6 +308,7 @@ final class GitHubDialog {
     }
 
     private void showLoggedIn() {
+        hideLoginDetails();
         if (installCard != null) installCard.setVisibility(View.GONE);
         if (loginButton != null) loginButton.setVisibility(View.GONE);
         if (logoutButton != null) logoutButton.setVisibility(View.VISIBLE);
@@ -317,6 +319,18 @@ final class GitHubDialog {
         if (repoSection != null) repoSection.setVisibility(View.VISIBLE);
         if (emptyView != null) emptyView.setVisibility(View.GONE);
         if (fab != null) fab.setVisibility(View.VISIBLE);
+    }
+
+    /**
+     * Hide the device code, the copy button, the verification link and the hint. They belong to
+     * the login flow and must disappear once the account is connected or the user is signed out.
+     */
+    private void hideLoginDetails() {
+        deviceCodeValue = null;
+        if (codeView != null) { codeView.setVisibility(View.GONE); codeView.setText(""); }
+        if (copyButton != null) copyButton.setVisibility(View.GONE);
+        if (linkView != null) { linkView.setVisibility(View.GONE); linkView.setText(""); }
+        if (hintView != null) { hintView.setVisibility(View.GONE); hintView.setText(""); }
     }
 
     private void setChip(int textRes, boolean connected) {
@@ -399,11 +413,7 @@ final class GitHubDialog {
             loginButton.setEnabled(false);
             loginButton.setText(R.string.opencode_github_fetching_code);
         }
-        deviceCodeValue = null;
-        if (codeView != null) { codeView.setVisibility(View.GONE); codeView.setText(""); }
-        if (copyButton != null) copyButton.setVisibility(View.GONE);
-        if (linkView != null) { linkView.setVisibility(View.GONE); linkView.setText(""); }
-        if (hintView != null) { hintView.setVisibility(View.GONE); hintView.setText(""); }
+        hideLoginDetails();
         if (statusView != null) statusView.setText(R.string.opencode_github_fetching_code);
         setChip(R.string.opencode_github_chip_signing_in, false);
         executor.execute(() -> {
@@ -470,6 +480,7 @@ final class GitHubDialog {
                     }
                     if (!isAlive()) return;
                     if (ok) {
+                        hideLoginDetails();
                         toast(R.string.opencode_github_login_success);
                         notifyAccountChanged();
                         loadState();
