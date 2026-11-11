@@ -104,7 +104,7 @@ final class GitHubDialog {
     private ImageButton refreshButton;
     private ImageButton moreButton;
     private ImageButton repoRefreshButton;
-    private ImageButton copyButton;
+    private Button copyButton;
     private Button installButton;
     private Button loginButton;
     private Button logoutButton;
