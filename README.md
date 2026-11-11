@@ -86,13 +86,13 @@ The full technical description, including the error matrix and the security trad
 - **No root, no proot** — only the Termux user space is used.
 - **Floating input bar** — a dedicated text field to type prompts into the full screen TUI.
 - **Keeps the device awake** — a wake lock is held while the agent is running.
-- **Projects outside Termux** — open projects in shared device storage (`/storage/emulated/0`) or
-  on an SD card. Grant access from **Settings → Bộ nhớ & SD card**, then tap **Chọn thư mục**.
-- **Full file manager** — **Settings → Tệp & thư mục → Mở** browses `$HOME`, the shared device
-  storage and SD cards. Open a folder as a project, open files with other apps, share one or more
-  entries (folders are zipped automatically), rename, create, delete, search recursively, sort,
-  bookmark locations, compress/extract ZIP archives, edit text files and inspect detailed
-  properties (permissions, checksums, symlinks, APK and image metadata).
+- **One file manager for everything** — **Settings → Quản lý tệp** opens a single file manager for
+  `$HOME`, the shared device storage, SD cards and GitHub. Tap an entry to open it, or long press to
+  see all actions. Open a folder as a project, open files with other apps, share one or more entries
+  (folders are zipped automatically), rename, create, delete, search recursively, sort, bookmark
+  locations, compress/extract ZIP archives, edit text files and inspect detailed properties
+  (permissions, checksums, symlinks, APK and image metadata). The same screen grants storage access
+  and logs in to GitHub to list and clone repositories.
 - **Share sheet integration** — the app appears in the Android share sheet. Files shared to it are
   copied to `~/Downloads` and opened in the file manager.
 
@@ -155,41 +155,44 @@ agent receives it exactly like a prompt typed in a real terminal.
 OpenCode can open projects outside `$HOME`, for example in `/storage/emulated/0/Documents` or on
 an SD card.
 
-1. Open the gear menu → **Bộ nhớ & SD card** → **Cấp quyền**.
-2. On Android 11+, enable **All files access** for the app. This is required to read and write the
-   root of an SD card. If it is denied, the app falls back to the legacy storage permission, which
-   still covers the primary shared storage. On Android 10 and lower the normal storage permission
-   is enough, including for an SD card.
+1. Open the gear menu → **Quản lý tệp**. This single entry opens the file manager for Termux,
+   shared storage, SD cards and GitHub.
+2. Open **Vị trí** (or **⋮ → Cấp quyền bộ nhớ ngoài**) and grant access. On Android 11+, enable
+   **All files access** for the app. This is required to read and write the root of an SD card. If
+   it is denied, the app falls back to the legacy storage permission, which still covers the primary
+   shared storage. On Android 10 and lower the normal storage permission is enough, including for
+   an SD card.
 3. The app creates `~/storage/shared` (primary storage) and `~/storage/sdcard1`,
    `~/storage/sdcard2`, … (additional volumes).
-4. Tap **Chọn thư mục** in the storage section, browse the internal storage or an SD card and
-   select the project folder. The project opens in OpenCode and its path is copied to the
-   clipboard. The picker only lists folders that Android actually allows the app to read.
+4. In the file manager, open **Vị trí → Bộ nhớ trong** or **Thẻ SD**, browse to the project folder
+   and long press it, then choose **Mở làm dự án**. The project opens in OpenCode and its path is
+   copied to the clipboard.
 5. Alternatively choose **Open Project** inside OpenCode and type one of the paths above (for
    example `~/storage/shared/Documents/my-project` or `/storage/emulated/0/Documents/my-project`)
-   and press Enter. The picker resolves `~` and absolute paths, but it does not list symlinked
-   directories, so type the path instead of browsing into `~/storage`.
+   and press Enter.
 
-If an SD card was inserted after the app started and does not appear, tap **Làm mới** in the
-storage section. If it still does not appear, fully close and reopen the app.
+If an SD card was inserted after the app started and does not appear, tap **Làm mới** in the file
+manager. If it still does not appear, fully close and reopen the app.
 
 ### File manager and the Android share sheet
 
-Repositories cloned from the GitHub section and other files written to `$HOME` accumulate over
-time. Open the gear menu → **Tệp & thư mục** → **Mở** to browse the Termux home directory, the
-shared device storage and an SD card.
+Repositories cloned from the GitHub screen and other files written to `$HOME` accumulate over
+time. Open the gear menu → **Quản lý tệp** to browse the Termux home directory, the shared
+device storage, an SD card and GitHub.
 
 - **Chạm** (tap) a folder to enter it, or a file to open it with a compatible app.
-- **Nhấn giữ** (long press) to start a selection. Select as many entries as needed and use the
-  toolbar to **share**, **delete**, **compress to ZIP** or **select all**.
-- **⋮** opens the actions for one entry: open, **Mở bằng…**, **Chỉnh sửa văn bản**, **Mở làm dự
-  án**, **Chia sẻ**, copy path, copy/move, rename, **Nén thành ZIP**, **Giải nén**, **Thông tin**
-  and delete. Search results also offer **Mở thư mục chứa**.
+- **Nhấn giữ** (long press) an entry to open its action menu, like a standard file manager. The
+  menu includes **Chọn nhiều**, which switches to multi-select mode; the toolbar then offers
+  **share**, **delete**, **compress to ZIP** and **select all**.
+- **⋮** opens the same actions for one entry: open, **Mở bằng…**, **Chỉnh sửa văn bản**, **Mở làm
+  dự án**, **Chọn nhiều**, **Chia sẻ**, copy path, copy/move, rename, **Nén thành ZIP**, **Giải
+  nén**, **Thông tin** and delete. Search results also offer **Mở thư mục chứa**.
+- **Vị trí** (the storage icon) jumps to `~`, the Termux files directory, internal storage, SD
+  cards, app data, `/`, and any folder saved as a bookmark. It also contains **GitHub** (login,
+  list repositories and clone) and the storage permission shortcuts.
 - **↑ / ⌂** navigate to the parent directory or back to `~`. The breadcrumb row jumps to any parent,
   and the path can be tapped for **Sao chép đường dẫn**, **Đi tới đường dẫn…**, **Vị trí** and
   bookmarks.
-- **Vị trí** (the storage icon) jumps to `~`, the Termux files directory, internal storage, SD
-  cards, app data, `/`, and any folder saved as a bookmark.
 - The toolbar also contains search (with **Tìm trong thư mục con** for a recursive search), a
   hidden-files toggle, sorting (name, size, modification time or type; ascending/descending;
   folders first) and **Thư mục mới** / **Tệp mới**.

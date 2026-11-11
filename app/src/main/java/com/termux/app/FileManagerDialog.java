@@ -8,6 +8,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.net.Uri;
+import android.os.Build;
 import android.os.StatFs;
 import android.system.Os;
 import android.system.OsConstants;
@@ -79,15 +80,25 @@ import java.util.zip.ZipOutputStream;
  *
  * <p>The manager can browse directories, open files with other apps, share one or more entries
  * through the Android share sheet (folders are zipped first), create, rename and delete entries
- * and inspect their size and timestamps. Files that Termux itself needs ({@code $PREFIX},
+ * and inspect their size and timestamps. The same screen grants shared-storage access and opens
+ * the GitHub login and clone screen. Files that Termux itself needs ({@code $PREFIX},
  * {@code ~/.opencode}, the volume roots) cannot be deleted, and symlinks are never followed while
  * deleting or zipping.</p>
  */
 final class FileManagerDialog {
 
-    /** Receives a directory that the user wants to open as an OpenCode project. */
+    /** Receives the actions that the file manager cannot perform on its own. */
     interface Listener {
+        /** Receives a directory that the user wants to open as an OpenCode project. */
         void onOpenProject(File directory);
+
+        /** Ask the activity to grant or refresh shared-storage access. */
+        default void onManageStorage() {
+        }
+
+        /** Ask the activity to open the GitHub login and clone screen. */
+        default void onOpenGitHub() {
+        }
     }
 
     /** Receives a validated name from a rename/create dialog. */
@@ -225,6 +236,12 @@ final class FileManagerDialog {
         if (dialog != null && dialog.isShowing()) dialog.dismiss();
     }
 
+    /** Reload the active manager, for example after storage access was granted. */
+    static void refreshActive() {
+        FileManagerDialog current = activeDialog == null ? null : activeDialog.get();
+        if (current != null && current.isAlive()) current.reload();
+    }
+
     private void show() {
         View view = LayoutInflater.from(activity)
             .inflate(R.layout.dialog_file_manager, null, false);
@@ -274,10 +291,7 @@ final class FileManagerDialog {
             if (selectionMode) {
                 toggleSelection(entry);
             } else {
-                selectionMode = true;
-                selection.add(entry.file.getAbsolutePath());
-                updateSelectionUi();
-                adapter.notifyDataSetChanged();
+                showEntryActions(entry);
             }
             return true;
         });
@@ -807,6 +821,14 @@ final class FileManagerDialog {
      * Selection
      * ========================================================================================== */
 
+    /** Enter multi-select mode with {@code entry} selected, used by the long-press menu. */
+    private void beginSelection(Entry entry) {
+        selectionMode = true;
+        selection.add(entry.file.getAbsolutePath());
+        updateSelectionUi();
+        adapter.notifyDataSetChanged();
+    }
+
     private void toggleSelection(Entry entry) {
         String path = entry.file.getAbsolutePath();
         if (!selection.remove(path)) selection.add(path);
@@ -903,6 +925,8 @@ final class FileManagerDialog {
             actions.add(() -> openContainingFolder(entry));
         }
 
+        labels.add(activity.getString(R.string.opencode_files_select_multiple));
+        actions.add(() -> beginSelection(entry));
         labels.add(activity.getString(R.string.opencode_files_share));
         actions.add(() -> shareEntries(Collections.singletonList(entry)));
         labels.add(activity.getString(R.string.opencode_files_copy_path));
@@ -1327,6 +1351,17 @@ final class FileManagerDialog {
             actions.add(this::pasteClipboard);
         }
 
+        labels.add(activity.getString(R.string.opencode_files_github));
+        actions.add(() -> listener.onOpenGitHub());
+        if (!StorageAccess.hasStoragePermission(activity)) {
+            labels.add(activity.getString(R.string.opencode_files_storage_grant));
+            actions.add(() -> listener.onManageStorage());
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R
+                && !StorageAccess.hasAllFilesAccess(activity)) {
+            labels.add(activity.getString(R.string.opencode_files_storage_grant_sd));
+            actions.add(() -> listener.onManageStorage());
+        }
+
         labels.add(activity.getString(R.string.opencode_files_locations));
         actions.add(this::showLocations);
         labels.add(activity.getString(R.string.opencode_files_go_to_path));
@@ -1419,6 +1454,17 @@ final class FileManagerDialog {
         }
         labels.add(activity.getString(R.string.opencode_files_location_root));
         actions.add(() -> navigateTo(new File("/")));
+
+        labels.add(activity.getString(R.string.opencode_files_github));
+        actions.add(() -> listener.onOpenGitHub());
+        if (!StorageAccess.hasStoragePermission(activity)) {
+            labels.add(activity.getString(R.string.opencode_files_storage_grant));
+            actions.add(() -> listener.onManageStorage());
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R
+                && !StorageAccess.hasAllFilesAccess(activity)) {
+            labels.add(activity.getString(R.string.opencode_files_storage_grant_sd));
+            actions.add(() -> listener.onManageStorage());
+        }
 
         if (!bookmarks.isEmpty()) {
             labels.add(activity.getString(R.string.opencode_files_bookmarks));

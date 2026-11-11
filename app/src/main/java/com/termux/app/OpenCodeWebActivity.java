@@ -120,6 +120,8 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
     private LinearLayout mGitHubRepoList;
     private TextView mGitHubRepoStatus;
     private Button mGitHubRepoRefreshButton;
+    private androidx.appcompat.app.AlertDialog mGitHubDialog;
+    private View mGitHubContentView;
     private TextView mStorageStatus;
     private Button mStorageGrantButton;
     private boolean mStorageSetupRunning;
@@ -203,7 +205,6 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
             });
         }
 
-        configureGitHubSettings();
         configureUpdateCheck();
         setupWakeLock();
         configureStorageSettings();
@@ -255,6 +256,7 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
         // in the background, without returning through onActivityResult().
         updateStorageUi();
         ensureStorageLinksIfNeeded();
+        FileManagerDialog.refreshActive();
     }
 
     @Override
@@ -734,30 +736,35 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
         showStatus(message, true);
     }
 
-    private void configureGitHubSettings() {
-        final View githubRow = findViewById(R.id.opencode_github_row);
-        final Button installBtn = findViewById(R.id.opencode_github_install_button);
-        final TextView status = findViewById(R.id.opencode_github_status);
-        final TextView installStatus = findViewById(R.id.opencode_github_install_status);
-        final Button loginBtn = findViewById(R.id.opencode_github_login_button);
-        final Button logoutBtn = findViewById(R.id.opencode_github_logout_button);
-        final TextView user = findViewById(R.id.opencode_github_user);
-        final TextView codeView = findViewById(R.id.opencode_github_code);
-        final TextView linkView = findViewById(R.id.opencode_github_link);
-        final TextView hintView = findViewById(R.id.opencode_github_hint);
-        final View cloneSection = findViewById(R.id.opencode_github_clone_section);
-        final EditText cloneUrl = findViewById(R.id.opencode_github_clone_url);
-        final Button cloneBtn = findViewById(R.id.opencode_github_clone_button);
-        final TextView cloneStatus = findViewById(R.id.opencode_github_clone_status);
-        mGitHubProgress = findViewById(R.id.opencode_github_progress);
-        mGitHubChip = findViewById(R.id.opencode_github_chip);
-        mGitHubCodeView = findViewById(R.id.opencode_github_code);
-        mGitHubCopyButton = findViewById(R.id.opencode_github_copy_button);
-        mGitHubPanel = findViewById(R.id.opencode_github_panel);
-        mGitHubRepoSection = findViewById(R.id.opencode_github_repo_section);
-        mGitHubRepoList = findViewById(R.id.opencode_github_repo_list);
-        mGitHubRepoStatus = findViewById(R.id.opencode_github_repo_status);
-        mGitHubRepoRefreshButton = findViewById(R.id.opencode_github_repo_refresh);
+    /**
+     * Bind the GitHub controls from {@code root}. The GitHub screen is a dialog that the unified
+     * file manager opens, so its views are not part of the activity layout.
+     */
+    private void bindGitHubSettings(View root) {
+        if (root == null) return;
+        final View githubRow = root.findViewById(R.id.opencode_github_row);
+        final Button installBtn = root.findViewById(R.id.opencode_github_install_button);
+        final TextView status = root.findViewById(R.id.opencode_github_status);
+        final TextView installStatus = root.findViewById(R.id.opencode_github_install_status);
+        final Button loginBtn = root.findViewById(R.id.opencode_github_login_button);
+        final Button logoutBtn = root.findViewById(R.id.opencode_github_logout_button);
+        final TextView user = root.findViewById(R.id.opencode_github_user);
+        final TextView codeView = root.findViewById(R.id.opencode_github_code);
+        final TextView linkView = root.findViewById(R.id.opencode_github_link);
+        final TextView hintView = root.findViewById(R.id.opencode_github_hint);
+        final View cloneSection = root.findViewById(R.id.opencode_github_clone_section);
+        final EditText cloneUrl = root.findViewById(R.id.opencode_github_clone_url);
+        final Button cloneBtn = root.findViewById(R.id.opencode_github_clone_button);
+        final TextView cloneStatus = root.findViewById(R.id.opencode_github_clone_status);
+        mGitHubProgress = root.findViewById(R.id.opencode_github_progress);
+        mGitHubChip = root.findViewById(R.id.opencode_github_chip);
+        mGitHubCodeView = root.findViewById(R.id.opencode_github_code);
+        mGitHubCopyButton = root.findViewById(R.id.opencode_github_copy_button);
+        mGitHubPanel = root.findViewById(R.id.opencode_github_panel);
+        mGitHubRepoSection = root.findViewById(R.id.opencode_github_repo_section);
+        mGitHubRepoList = root.findViewById(R.id.opencode_github_repo_list);
+        mGitHubRepoStatus = root.findViewById(R.id.opencode_github_repo_status);
+        mGitHubRepoRefreshButton = root.findViewById(R.id.opencode_github_repo_refresh);
 
         if (mGitHubCopyButton != null) {
             mGitHubCopyButton.setOnClickListener(new View.OnClickListener() {
@@ -853,6 +860,46 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
         }
 
         updateGitHubState(status, installStatus, installBtn, loginBtn, logoutBtn, user, codeView, linkView, hintView, cloneSection);
+    }
+
+    /** Open the GitHub login, repository and clone screen on top of the file manager. */
+    private void showGitHubDialog() {
+        if (isFinishing() || isDestroyed()) return;
+        if (mGitHubDialog != null && mGitHubDialog.isShowing()) return;
+
+        View content = android.view.LayoutInflater.from(this)
+            .inflate(R.layout.dialog_github, null, false);
+        mGitHubContentView = content;
+        bindGitHubSettings(content);
+
+        mGitHubDialog = new MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.opencode_settings_github)
+            .setView(content)
+            .setNegativeButton(R.string.opencode_files_close, null)
+            .create();
+        mGitHubDialog.setOnDismissListener(dialog -> {
+            mGitHubDialog = null;
+            mGitHubContentView = null;
+        });
+        mGitHubDialog.show();
+        android.view.Window window = mGitHubDialog.getWindow();
+        if (window != null) {
+            window.setLayout(android.view.WindowManager.LayoutParams.MATCH_PARENT,
+                android.view.WindowManager.LayoutParams.MATCH_PARENT);
+        }
+    }
+
+    /**
+     * Re-bind the open GitHub dialog after a long running install or login. The operation keeps
+     * references to the views that existed when it started, so the dialog would otherwise stay on
+     * its initial state if it was closed and opened again while the operation was running.
+     */
+    private void rebindGitHubDialogIfStale(View capturedStatus) {
+        if (mGitHubDialog == null || !mGitHubDialog.isShowing()) return;
+        if (mGitHubContentView == null) return;
+        View currentStatus = mGitHubContentView.findViewById(R.id.opencode_github_status);
+        if (capturedStatus != null && capturedStatus == currentStatus) return;
+        bindGitHubSettings(mGitHubContentView);
     }
 
     private void setGitHubChip(final String text, final boolean connected) {
@@ -1076,6 +1123,7 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
                         if (installBtn != null) { installBtn.setEnabled(true); installBtn.setText("Tải lại git & gh"); }
                         mGitHubInstalling = false;
                         updateGitHubState(status, installStatus, installBtn, loginBtn, logoutBtn, user, codeView, linkView, hintView, cloneSection);
+                        rebindGitHubDialogIfStale(status);
                     }
                 });
             }
@@ -1208,9 +1256,11 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
                                 if (hintView != null) { hintView.setVisibility(View.GONE); hintView.setText(""); }
                                 updateGitHubState(status, installStatus, installBtn, loginBtn, logoutBtn, user, codeView, linkView, hintView, cloneSection);
                                 syncNativeWithGitHub(status);
+                                rebindGitHubDialogIfStale(status);
                             } else {
                                 status.setText("Đã xác thực nhưng gh chưa ghi nhận đăng nhập. Hãy thử lại.");
                                 setGitHubChip("Chưa đăng nhập", false);
+                                rebindGitHubDialogIfStale(status);
                             }
                         }
                     });
@@ -1232,6 +1282,7 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
                                 installStatus.setVisibility(View.VISIBLE);
                                 installStatus.setText(message);
                             }
+                            rebindGitHubDialogIfStale(status);
                         }
                     });
                 }
@@ -1613,6 +1664,7 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
                         android.widget.Toast.makeText(OpenCodeWebActivity.this,
                             ok ? "Clone hoàn tất" : "Clone thất bại",
                             android.widget.Toast.LENGTH_LONG).show();
+                        if (ok) FileManagerDialog.refreshActive();
                     }
                 });
             }
@@ -2171,51 +2223,39 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
      * ========================================================================================== */
 
     private void configureStorageSettings() {
-        mStorageStatus = findViewById(R.id.opencode_storage_status);
-        mStorageGrantButton = findViewById(R.id.opencode_storage_grant_button);
-        if (mStorageGrantButton != null) {
-            mStorageGrantButton.setOnClickListener(new View.OnClickListener() {
-                @Override
-                public void onClick(View v) {
-                    onStorageActionClicked();
-                }
-            });
-        }
-        View pickButton = findViewById(R.id.opencode_storage_pick_button);
-        if (pickButton != null) {
-            pickButton.setOnClickListener(new View.OnClickListener() {
-                @Override
-                public void onClick(View v) {
-                    onPickProjectClicked();
-                }
-            });
-        }
-        updateStorageUi();
         ensureStorageLinksIfNeeded();
     }
 
     /**
-     * The file manager row opens the manager for the Termux home directory. A directory that the
-     * user chooses there is opened as an OpenCode project, exactly like a folder from the folder
-     * picker.
+     * The single settings card opens the file manager for the Termux home directory. The same
+     * manager also exposes shared storage and GitHub, so those features no longer need their own
+     * settings cards.
      */
     private void configureFileManagerSettings() {
         View row = findViewById(R.id.opencode_files_row);
-        Button manage = findViewById(R.id.opencode_files_manage_button);
-        View.OnClickListener open = new View.OnClickListener() {
+        if (row != null) {
+            row.setOnClickListener(v -> FileManagerDialog.show(this, fileManagerListener()));
+        }
+    }
+
+    /** The callbacks that the file manager needs from the activity. */
+    private FileManagerDialog.Listener fileManagerListener() {
+        return new FileManagerDialog.Listener() {
             @Override
-            public void onClick(View v) {
-                FileManagerDialog.show(OpenCodeWebActivity.this,
-                    new FileManagerDialog.Listener() {
-                        @Override
-                        public void onOpenProject(File directory) {
-                            openProjectDirectory(directory);
-                        }
-                    });
+            public void onOpenProject(File directory) {
+                openProjectDirectory(directory);
+            }
+
+            @Override
+            public void onManageStorage() {
+                onStorageActionClicked();
+            }
+
+            @Override
+            public void onOpenGitHub() {
+                showGitHubDialog();
             }
         };
-        if (row != null) row.setOnClickListener(open);
-        if (manage != null) manage.setOnClickListener(open);
     }
 
     /**
@@ -2230,12 +2270,7 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
 
         File directory = new File(path);
         if (!directory.isDirectory()) directory = new File(TermuxConstants.TERMUX_HOME_DIR_PATH);
-        FileManagerDialog.show(this, directory, new FileManagerDialog.Listener() {
-            @Override
-            public void onOpenProject(File project) {
-                openProjectDirectory(project);
-            }
-        });
+        FileManagerDialog.show(this, directory, fileManagerListener());
     }
 
     /**
@@ -2471,6 +2506,7 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
                     android.widget.Toast.LENGTH_SHORT).show();
             }
             runStorageSetup();
+            FileManagerDialog.refreshActive();
             return;
         }
 
@@ -2529,6 +2565,8 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
                             mStorageSetupRunning = false;
                             if (isFinishing() || isDestroyed()) return;
                             updateStorageUi();
+                            // The file manager may be open while the symlinks are created.
+                            FileManagerDialog.refreshActive();
                         }
                     });
                 }
