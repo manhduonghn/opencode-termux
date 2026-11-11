@@ -99,6 +99,13 @@ final class FileManagerDialog {
         /** Ask the activity to grant or refresh shared-storage access. */
         default void onManageStorage() {
         }
+
+        /**
+         * The GitHub account changed inside the file manager. The activity restarts the native
+         * service so it picks up the new credentials.
+         */
+        default void onGitHubAccountChanged() {
+        }
     }
 
     /** Receives a validated name from a rename/create dialog. */
@@ -431,6 +438,10 @@ final class FileManagerDialog {
         }
         addDrawerItem(activity.getString(R.string.opencode_files_location_root), "/",
             R.drawable.ic_storage, () -> navigateTo(new File("/")));
+
+        addDrawerItem(activity.getString(R.string.opencode_files_github),
+            activity.getString(R.string.opencode_files_github_desc),
+            R.drawable.ic_github_branch, this::openGitHub);
 
         if (!bookmarks.isEmpty()) {
             addDrawerItem(activity.getString(R.string.opencode_files_bookmarks),
@@ -1143,6 +1154,25 @@ final class FileManagerDialog {
     private void viewCode(Entry entry, boolean startEditing) {
         boolean writable = !entry.symlink && isSafeToModify(entry.file) && entry.file.canWrite();
         CodeViewerDialog.show(activity, entry.file, writable, startEditing, file -> reload());
+    }
+
+    /**
+     * Open the GitHub screen of the file manager. Repositories clone into the folder that is
+     * currently open, and the manager reloads so the new folder appears right away.
+     */
+    private void openGitHub() {
+        File directory = currentDirectory != null ? currentDirectory : home;
+        GitHubDialog.show(activity, directory, new GitHubDialog.Listener() {
+            @Override
+            public void onAccountChanged() {
+                listener.onGitHubAccountChanged();
+            }
+
+            @Override
+            public void onCloned(File cloned) {
+                reload();
+            }
+        });
     }
 
     private void openProject(Entry entry) {
