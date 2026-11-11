@@ -232,7 +232,7 @@
     <string name="opencode_files_time_minutes">%1$d phút trước</string>
     <string name="opencode_files_time_hours">%1$d giờ trước</string>
     <string name="opencode_files_time_days">%1$d ngày trước</string>
-    <string name="opencode_files_hint">Chạm để mở, nhấn giữ để xem thao tác. Nút ⋮ có chọn nhiều, nén/giải nén, sửa văn bản, quyền, thông tin và yêu thích. Tệp hệ thống của Termux được bảo vệ.</string>
+    <string name="opencode_files_hint">Chạm để mở, nhấn giữ để chọn nhiều. Nút ⋮ trên mỗi dòng có thao tác, nén/giải nén, sửa văn bản, quyền, thông tin và yêu thích. Tệp hệ thống của Termux được bảo vệ.</string>
 
     <!-- Receiving files from the Android share sheet -->
     <string name="opencode_share_receiving_title">Đang nhận tệp</string>

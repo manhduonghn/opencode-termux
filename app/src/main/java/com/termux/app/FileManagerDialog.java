@@ -318,7 +318,9 @@ final class FileManagerDialog {
             if (selectionMode) {
                 toggleSelection(entry);
             } else {
-                showEntryActions(entry);
+                // Material Files behaviour: a long press starts multi-select instead of
+                // forcing the user through an action menu before anything can happen.
+                beginSelection(entry);
             }
             return true;
         };
@@ -1019,7 +1021,7 @@ final class FileManagerDialog {
      * Selection
      * ========================================================================================== */
 
-    /** Enter multi-select mode with {@code entry} selected, used by the long-press menu. */
+    /** Enter multi-select mode with {@code entry} selected, used by long press and the menus. */
     private void beginSelection(Entry entry) {
         selectionMode = true;
         selection.add(entry.file.getAbsolutePath());

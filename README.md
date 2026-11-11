@@ -89,8 +89,8 @@ The full technical description, including the error matrix and the security trad
 - **One file manager for everything** — the **folder button in the top bar** opens a single full
   screen file manager for `$HOME`, the shared device storage, SD cards and GitHub. It works like a
   standard file manager: a locations drawer, list/grid view, a create button, breadcrumbs and
-  multi-select. Tap an entry to open it, or long press to see all actions. Open a folder as a
-  project, open files with other apps, share one or more entries (folders are zipped
+  multi-select. Tap an entry to open it; long press starts multi-select, and the ⋮ button shows all
+  actions. Open a folder as a project, open files with other apps, share one or more entries (folders are zipped
   automatically), rename, create, delete, search recursively, sort, bookmark locations,
   compress/extract ZIP archives, edit text files and inspect detailed properties (permissions,
   checksums, symlinks, APK and image metadata). The same screen grants storage access and logs in
@@ -183,9 +183,9 @@ time. Tap the **folder button in the top bar** to browse the Termux home directo
 device storage, an SD card and GitHub.
 
 - **Chạm** (tap) a folder to enter it, or a file to open it with a compatible app.
-- **Nhấn giữ** (long press) an entry to open its action menu, like a standard file manager. The
-  menu includes **Chọn nhiều**, which switches to multi-select mode; the toolbar then offers
-  **share**, **delete**, **compress to ZIP** and **select all**.
+- **Nhấn giữ** (long press) an entry to start multi-select, like a standard file manager. The
+  selection toolbar then offers **share**, **delete**, **compress to ZIP**, **select all** and the
+  full action menu.
 - **⋮** opens the same actions for one entry: open, **Mở bằng…**, **Chỉnh sửa văn bản**, **Mở làm
   dự án**, **Chọn nhiều**, **Chia sẻ**, copy path, copy/move, rename, **Nén thành ZIP**, **Giải
   nén**, **Thông tin** and delete. Search results also offer **Mở thư mục chứa**.
