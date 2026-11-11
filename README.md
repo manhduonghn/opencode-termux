@@ -90,8 +90,9 @@ The full technical description, including the error matrix and the security trad
   on an SD card. Grant access from **Settings → Bộ nhớ & SD card**, then tap **Chọn thư mục**.
 - **Full file manager** — **Settings → Tệp & thư mục → Mở** browses `$HOME`, the shared device
   storage and SD cards. Open a folder as a project, open files with other apps, share one or more
-  entries (folders are zipped automatically), rename, create, delete, search, sort and inspect
-  sizes.
+  entries (folders are zipped automatically), rename, create, delete, search recursively, sort,
+  bookmark locations, compress/extract ZIP archives, edit text files and inspect detailed
+  properties (permissions, checksums, symlinks, APK and image metadata).
 - **Share sheet integration** — the app appears in the Android share sheet. Files shared to it are
   copied to `~/Downloads` and opened in the file manager.
 
@@ -180,13 +181,27 @@ shared device storage and an SD card.
 
 - **Chạm** (tap) a folder to enter it, or a file to open it with a compatible app.
 - **Nhấn giữ** (long press) to start a selection. Select as many entries as needed and use the
-  toolbar to **share**, **delete** or **select all**.
-- **⋮** opens the actions for one entry: open, **Mở làm dự án**, **Chia sẻ**, copy path, rename,
-  details and delete.
-- **↑ / ⌂** navigate to the parent directory or back to `~`. The path is clickable and copies the
-  current directory.
-- The toolbar also contains search, a hidden-files toggle, sorting (name, size, modification time)
-  and **Thư mục mới** / **Tệp mới**.
+  toolbar to **share**, **delete**, **compress to ZIP** or **select all**.
+- **⋮** opens the actions for one entry: open, **Mở bằng…**, **Chỉnh sửa văn bản**, **Mở làm dự
+  án**, **Chia sẻ**, copy path, copy/move, rename, **Nén thành ZIP**, **Giải nén**, **Thông tin**
+  and delete. Search results also offer **Mở thư mục chứa**.
+- **↑ / ⌂** navigate to the parent directory or back to `~`. The breadcrumb row jumps to any parent,
+  and the path can be tapped for **Sao chép đường dẫn**, **Đi tới đường dẫn…**, **Vị trí** and
+  bookmarks.
+- **Vị trí** (the storage icon) jumps to `~`, the Termux files directory, internal storage, SD
+  cards, app data, `/`, and any folder saved as a bookmark.
+- The toolbar also contains search (with **Tìm trong thư mục con** for a recursive search), a
+  hidden-files toggle, sorting (name, size, modification time or type; ascending/descending;
+  folders first) and **Thư mục mới** / **Tệp mới**.
+- **Thông tin** shows size and recursive contents, modification time, owner, POSIX mode (with a
+  chmod editor), SELinux context, symlink target, MD5/SHA-1/SHA-256 checksums, and APK or image
+  metadata. The whole report can be copied.
+- The built-in text editor opens UTF-8 files up to 4 MB, saves atomically and keeps the original
+  POSIX mode. Binary files and symlinks are refused.
+
+**ZIP archives** can be created next to the selection and extracted into a new folder. Extraction
+validates every entry name, so an archive cannot write outside its destination folder (zip-slip).
+Symlinks are never followed by copy, delete, search, compression or extraction.
 
 **Sharing** uses the normal Android share sheet. Files are exposed through a non-exported
 `FileProvider` with a temporary, per-URI read grant. Folders are zipped into the app cache first,

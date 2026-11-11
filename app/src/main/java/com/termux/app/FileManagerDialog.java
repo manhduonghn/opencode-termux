@@ -28,20 +28,27 @@ import android.widget.BaseAdapter;
 import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.FrameLayout;
+import android.widget.HorizontalScrollView;
 import android.widget.ImageButton;
 import android.widget.ImageView;
+import android.widget.LinearLayout;
 import android.widget.ListView;
 import android.widget.ProgressBar;
+import android.widget.RadioButton;
+import android.widget.RadioGroup;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.appcompat.app.AlertDialog;
+import androidx.core.content.ContextCompat;
 import androidx.core.content.FileProvider;
 
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.termux.BuildConfig;
 import com.termux.R;
 import com.termux.shared.termux.TermuxConstants;
+
+import org.json.JSONArray;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
@@ -91,6 +98,10 @@ final class FileManagerDialog {
     private static final String PREFS_NAME = "opencode_cfg";
     private static final String PREF_SHOW_HIDDEN = "file_manager_show_hidden";
     private static final String PREF_SORT = "file_manager_sort";
+    private static final String PREF_SORT_ASCENDING = "file_manager_sort_ascending";
+    private static final String PREF_DIRS_FIRST = "file_manager_dirs_first";
+    private static final String PREF_RECURSIVE_SEARCH = "file_manager_recursive_search";
+    private static final String PREF_BOOKMARKS = "file_manager_bookmarks";
 
     private static final String FILE_PROVIDER_SUFFIX = ".fileprovider";
     private static final String SHARE_CACHE_DIR = "shared";
@@ -99,10 +110,11 @@ final class FileManagerDialog {
     private static final int SORT_NAME = 0;
     private static final int SORT_SIZE = 1;
     private static final int SORT_MODIFIED = 2;
+    private static final int SORT_TYPE = 3;
 
-    private static final int DETAILS_CALCULATING = -2;
     private static final int DETAILS_UNKNOWN = -1;
-    private static final int MEASURE_LIMIT = 200_000;
+    private static final int SEARCH_LIMIT = 5_000;
+    private static final int SEARCH_MAX_DEPTH = 24;
 
     /** The manager that is currently shown, so a second request replaces it instead of stacking. */
     private static WeakReference<FileManagerDialog> activeDialog;
@@ -137,10 +149,14 @@ final class FileManagerDialog {
     private ImageButton upButton;
     private ImageButton homeButton;
     private ImageButton refreshButton;
+    private ImageButton locationsButton;
     private ImageButton searchButton;
     private ImageButton moreButton;
+    private HorizontalScrollView breadcrumbScroll;
+    private LinearLayout breadcrumb;
     private View searchRow;
     private EditText searchInput;
+    private CheckBox searchRecursive;
     private View selectionBar;
     private TextView selectionCount;
     private ImageButton selectionShare;
@@ -150,18 +166,26 @@ final class FileManagerDialog {
     private ImageButton selectionClose;
 
     private final List<Entry> allEntries = new ArrayList<>();
+    private final List<Entry> searchResults = new ArrayList<>();
     private final List<Entry> entries = new ArrayList<>();
     private final Set<String> selection = new LinkedHashSet<>();
     private final List<File> clipboard = new ArrayList<>();
+    private final List<String> bookmarks = new ArrayList<>();
     private EntryAdapter adapter;
-    private File currentDirectory;
+    private volatile File currentDirectory;
     private String query = "";
+    private String searchQuery = "";
     private boolean loading;
+    private boolean searching;
     private boolean busy;
     private boolean selectionMode;
     private boolean showHidden;
+    private boolean recursiveSearch;
+    private boolean sortAscending;
+    private boolean directoriesFirst;
     private int sortMode;
     private int loadGeneration;
+    private volatile int searchGeneration;
     private String temporaryStatus;
     private boolean clipboardMove;
 
@@ -172,7 +196,11 @@ final class FileManagerDialog {
         this.startedAt = startDirectory != null ? startDirectory.getAbsoluteFile() : home;
         this.preferences = activity.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
         this.showHidden = preferences.getBoolean(PREF_SHOW_HIDDEN, false);
+        this.recursiveSearch = preferences.getBoolean(PREF_RECURSIVE_SEARCH, true);
         this.sortMode = preferences.getInt(PREF_SORT, SORT_NAME);
+        this.sortAscending = preferences.getBoolean(PREF_SORT_ASCENDING, true);
+        this.directoriesFirst = preferences.getBoolean(PREF_DIRS_FIRST, true);
+        loadBookmarks();
     }
 
     /** Show the manager at the Termux home directory. Must be called on the UI thread. */
@@ -209,10 +237,14 @@ final class FileManagerDialog {
         upButton = view.findViewById(R.id.managed_file_up);
         homeButton = view.findViewById(R.id.managed_file_home);
         refreshButton = view.findViewById(R.id.managed_file_refresh);
+        locationsButton = view.findViewById(R.id.managed_file_locations);
         searchButton = view.findViewById(R.id.managed_file_search);
         moreButton = view.findViewById(R.id.managed_file_more);
+        breadcrumbScroll = view.findViewById(R.id.managed_file_breadcrumb_scroll);
+        breadcrumb = view.findViewById(R.id.managed_file_breadcrumb);
         searchRow = view.findViewById(R.id.managed_file_search_row);
         searchInput = view.findViewById(R.id.managed_file_search_input);
+        searchRecursive = view.findViewById(R.id.managed_file_search_recursive);
         selectionBar = view.findViewById(R.id.managed_file_selection_bar);
         selectionCount = view.findViewById(R.id.managed_file_selection_count);
         selectionShare = view.findViewById(R.id.managed_file_selection_share);
@@ -232,7 +264,7 @@ final class FileManagerDialog {
             } else if (entry.file.isDirectory()) {
                 navigateTo(entry.file);
             } else {
-                openFile(entry);
+                openFile(entry, false);
             }
         });
         listView.setOnItemLongClickListener((parent, item, position, id) -> {
@@ -256,12 +288,25 @@ final class FileManagerDialog {
         });
         homeButton.setOnClickListener(v -> navigateTo(home));
         refreshButton.setOnClickListener(v -> reload());
-        pathView.setOnClickListener(v -> copyPath(currentDirectory));
+        pathView.setOnClickListener(v -> showPathActions());
+        pathView.setOnLongClickListener(v -> {
+            copyPath(currentDirectory);
+            return true;
+        });
+        if (locationsButton != null) locationsButton.setOnClickListener(v -> showLocations());
         searchButton.setOnClickListener(v -> toggleSearch());
         moreButton.setOnClickListener(v -> showDirectoryActions());
 
         View searchClear = view.findViewById(R.id.managed_file_search_clear);
         if (searchClear != null) searchClear.setOnClickListener(v -> closeSearch());
+        if (searchRecursive != null) {
+            searchRecursive.setChecked(recursiveSearch);
+            searchRecursive.setOnCheckedChangeListener((button, checked) -> {
+                recursiveSearch = checked;
+                preferences.edit().putBoolean(PREF_RECURSIVE_SEARCH, checked).apply();
+                if (!query.trim().isEmpty()) rebuildVisibleEntries();
+            });
+        }
         searchInput.addTextChangedListener(new TextWatcher() {
             @Override
             public void beforeTextChanged(CharSequence s, int start, int count, int after) {
@@ -296,6 +341,8 @@ final class FileManagerDialog {
         builder.setView(view);
         builder.setNegativeButton(R.string.opencode_files_close, null);
         builder.setOnDismissListener(d -> {
+            loadGeneration++;
+            searchGeneration++;
             executor.shutdownNow();
             FileManagerDialog current = activeDialog == null ? null : activeDialog.get();
             if (current == this) activeDialog = null;
@@ -312,7 +359,7 @@ final class FileManagerDialog {
         Window window = dialog.getWindow();
         if (window != null) {
             window.setLayout(WindowManager.LayoutParams.MATCH_PARENT,
-                WindowManager.LayoutParams.WRAP_CONTENT);
+                WindowManager.LayoutParams.MATCH_PARENT);
         }
 
         File start = startedAt;
@@ -349,6 +396,10 @@ final class FileManagerDialog {
             return;
         }
         currentDirectory = target;
+        searchGeneration++;
+        searching = false;
+        searchQuery = "";
+        searchResults.clear();
         exitSelection();
         closeSearch();
         updatePath();
@@ -372,12 +423,74 @@ final class FileManagerDialog {
             R.string.opencode_files_path_description, path));
         if (upButton != null) upButton.setEnabled(currentDirectory.getParentFile() != null);
         if (homeButton != null) homeButton.setEnabled(!path.equals(homePath));
+        updateBreadcrumbs(path, homePath);
+    }
+
+    /** Rebuild the clickable path segments below the toolbar. */
+    private void updateBreadcrumbs(String path, String homePath) {
+        if (breadcrumb == null) return;
+        breadcrumb.removeAllViews();
+
+        List<String> labels = new ArrayList<>();
+        List<File> targets = new ArrayList<>();
+        if (path.equals(homePath) || path.startsWith(homePath + "/")) {
+            labels.add("~");
+            targets.add(home);
+            String rest = path.substring(homePath.length());
+            File cursor = home;
+            for (String part : rest.split("/")) {
+                if (part.isEmpty()) continue;
+                cursor = new File(cursor, part);
+                labels.add(part);
+                targets.add(cursor);
+            }
+        } else {
+            labels.add("/");
+            targets.add(new File("/"));
+            File cursor = new File("/");
+            for (String part : path.split("/")) {
+                if (part.isEmpty()) continue;
+                cursor = new File(cursor, part);
+                labels.add(part);
+                targets.add(cursor);
+            }
+        }
+
+        int accent = ContextCompat.getColor(activity, R.color.github_accent);
+        int muted = ContextCompat.getColor(activity, R.color.github_muted);
+        for (int i = 0; i < labels.size(); i++) {
+            final File target = targets.get(i);
+            TextView segment = new TextView(activity);
+            segment.setText(labels.get(i));
+            segment.setTextSize(12);
+            segment.setSingleLine(true);
+            segment.setPadding(dp(6), dp(3), dp(6), dp(3));
+            segment.setTextColor(i == labels.size() - 1 ? accent : muted);
+            segment.setBackgroundResource(android.R.drawable.list_selector_background);
+            segment.setOnClickListener(v -> navigateTo(target));
+            breadcrumb.addView(segment);
+            if (i < labels.size() - 1) {
+                TextView separator = new TextView(activity);
+                separator.setText("›");
+                separator.setTextSize(12);
+                separator.setTextColor(muted);
+                separator.setPadding(dp(1), dp(3), dp(1), dp(3));
+                breadcrumb.addView(separator);
+            }
+        }
+        if (breadcrumbScroll != null) {
+            breadcrumbScroll.post(() -> breadcrumbScroll.fullScroll(View.FOCUS_RIGHT));
+        }
     }
 
     private void reload() {
         if (currentDirectory == null) return;
         final File directory = currentDirectory;
         final int generation = ++loadGeneration;
+        searchGeneration++;
+        searching = false;
+        searchQuery = "";
+        searchResults.clear();
         loading = true;
         setProgressVisible(true);
         temporaryStatus = null;
@@ -428,6 +541,8 @@ final class FileManagerDialog {
 
         final boolean hidden = showHidden;
         final int sort = sortMode;
+        final boolean ascending = sortAscending;
+        final boolean dirsFirst = directoriesFirst;
         List<Entry> result = new ArrayList<>();
         for (File child : children) {
             String name = child.getName();
@@ -443,46 +558,175 @@ final class FileManagerDialog {
         }
 
         Collections.sort(result, (left, right) -> {
-            if (left.directory != right.directory) return left.directory ? -1 : 1;
+            if (dirsFirst && left.directory != right.directory) {
+                return left.directory ? -1 : 1;
+            }
             int comparison;
             switch (sort) {
                 case SORT_SIZE:
-                    comparison = Long.compare(right.size, left.size);
+                    comparison = Long.compare(left.size, right.size);
                     break;
                 case SORT_MODIFIED:
-                    comparison = Long.compare(right.modified, left.modified);
+                    comparison = Long.compare(left.modified, right.modified);
+                    break;
+                case SORT_TYPE:
+                    comparison = typeKey(left).compareToIgnoreCase(typeKey(right));
                     break;
                 default:
-                    comparison = 0;
+                    comparison = left.file.getName().compareToIgnoreCase(right.file.getName());
                     break;
             }
             if (comparison == 0) {
                 comparison = left.file.getName().compareToIgnoreCase(right.file.getName());
             }
-            return comparison;
+            return ascending ? comparison : -comparison;
         });
         return result;
     }
 
+    private static String typeKey(Entry entry) {
+        String name = entry.file.getName();
+        int dot = name.lastIndexOf('.');
+        return dot > 0 ? name.substring(dot + 1).toLowerCase(Locale.ROOT) : "";
+    }
+
     private void rebuildVisibleEntries() {
         if (adapter == null) return;
-        entries.clear();
         String filter = query.trim().toLowerCase(Locale.ROOT);
+        if (filter.isEmpty()) {
+            searchGeneration++;
+            searching = false;
+            searchQuery = "";
+            searchResults.clear();
+            entries.clear();
+            entries.addAll(allEntries);
+            adapter.notifyDataSetChanged();
+            setProgressVisible(false);
+            updateEmptyView();
+            updateSummary();
+            updateSelectionUi();
+            return;
+        }
+
+        if (recursiveSearch) {
+            if (!searching || !filter.equals(searchQuery)) {
+                startRecursiveSearch(filter);
+            }
+            return;
+        }
+
+        searchGeneration++;
+        searching = false;
+        searchQuery = "";
+        searchResults.clear();
+        entries.clear();
         for (Entry entry : allEntries) {
-            if (filter.isEmpty()
-                || entry.file.getName().toLowerCase(Locale.ROOT).contains(filter)) {
+            if (entry.file.getName().toLowerCase(Locale.ROOT).contains(filter)) {
                 entries.add(entry);
             }
         }
         adapter.notifyDataSetChanged();
+        setProgressVisible(false);
         updateEmptyView();
         updateSummary();
         updateSelectionUi();
     }
 
+    /** Search recursively below the current directory, without following symbolic links. */
+    private void startRecursiveSearch(final String filter) {
+        final File root = currentDirectory;
+        if (root == null) return;
+        final int generation = ++searchGeneration;
+        searchQuery = filter;
+        searching = true;
+        entries.clear();
+        adapter.notifyDataSetChanged();
+        updateEmptyView();
+        updateSummary();
+        setProgressVisible(true);
+
+        executor.execute(() -> {
+            List<Entry> found = new ArrayList<>();
+            ArrayDeque<FileDepth> stack = new ArrayDeque<>();
+            stack.push(new FileDepth(root, 0));
+            int visited = 0;
+            while (!stack.isEmpty() && found.size() < SEARCH_LIMIT) {
+                if (generation != searchGeneration || Thread.currentThread().isInterrupted()) {
+                    return;
+                }
+                FileDepth current = stack.pop();
+                File[] children = current.file.listFiles();
+                if (children == null) continue;
+                for (File child : children) {
+                    if (generation != searchGeneration
+                        || Thread.currentThread().isInterrupted()) {
+                        return;
+                    }
+                    if (++visited > SEARCH_LIMIT * 8) {
+                        stack.clear();
+                        break;
+                    }
+                    String name = child.getName();
+                    if (!showHidden && name.startsWith(".")) continue;
+                    if (isSymbolicLink(child)) continue;
+                    Entry entry = new Entry(child);
+                    entry.directory = child.isDirectory();
+                    entry.modified = child.lastModified();
+                    entry.size = entry.directory ? DETAILS_UNKNOWN
+                        : Math.max(0, child.length());
+                    entry.relativePath = relativePath(root, child);
+                    if (name.toLowerCase(Locale.ROOT).contains(filter)) {
+                        found.add(entry);
+                        if (found.size() >= SEARCH_LIMIT) break;
+                    }
+                    if (entry.directory && current.depth < SEARCH_MAX_DEPTH) {
+                        stack.push(new FileDepth(child, current.depth + 1));
+                    }
+                }
+            }
+            Collections.sort(found, (left, right) -> {
+                if (left.directory != right.directory) return left.directory ? -1 : 1;
+                return left.relativePath.compareToIgnoreCase(right.relativePath);
+            });
+            final List<Entry> results = found;
+            activity.runOnUiThread(() -> {
+                if (!isAlive() || generation != searchGeneration) return;
+                searching = false;
+                searchResults.clear();
+                searchResults.addAll(results);
+                entries.clear();
+                entries.addAll(searchResults);
+                adapter.notifyDataSetChanged();
+                setProgressVisible(false);
+                updateEmptyView();
+                updateSummary();
+                updateSelectionUi();
+            });
+        });
+    }
+
+    private static String relativePath(File root, File child) {
+        String rootPath = root.getAbsolutePath();
+        String childPath = child.getAbsolutePath();
+        if (childPath.startsWith(rootPath + File.separator)) {
+            return childPath.substring(rootPath.length() + 1);
+        }
+        return childPath;
+    }
+
+    private static final class FileDepth {
+        final File file;
+        final int depth;
+
+        FileDepth(File file, int depth) {
+            this.file = file;
+            this.depth = depth;
+        }
+    }
+
     private void updateEmptyView() {
         if (emptyView == null) return;
-        if (loading) {
+        if (loading || searching) {
             emptyView.setVisibility(View.GONE);
             return;
         }
@@ -507,8 +751,19 @@ final class FileManagerDialog {
         } else if (selectionMode) {
             summaryView.setText(activity.getString(
                 R.string.opencode_files_summary_selected, selection.size()));
+        } else if (searching) {
+            summaryView.setText(R.string.opencode_files_searching);
         } else if (loading) {
             summaryView.setText(R.string.opencode_files_scanning);
+        } else if (recursiveSearch && !query.trim().isEmpty()) {
+            if (freeBytes >= 0) {
+                summaryView.setText(activity.getString(
+                    R.string.opencode_files_search_results_free,
+                    entries.size(), OpenCodeInstallDialog.formatSize(freeBytes)));
+            } else {
+                summaryView.setText(activity.getString(
+                    R.string.opencode_files_search_results, entries.size()));
+            }
         } else if (freeBytes >= 0) {
             summaryView.setText(activity.getString(R.string.opencode_files_summary,
                 entries.size(), OpenCodeInstallDialog.formatSize(freeBytes)));
@@ -536,6 +791,7 @@ final class FileManagerDialog {
     private void setControlsEnabled(boolean enabled) {
         if (refreshButton != null) refreshButton.setEnabled(enabled && !busy);
         if (searchButton != null) searchButton.setEnabled(enabled && !busy);
+        if (locationsButton != null) locationsButton.setEnabled(enabled && !busy);
         if (moreButton != null) moreButton.setEnabled(enabled && !busy);
         if (upButton != null) {
             upButton.setEnabled(enabled && currentDirectory != null
@@ -590,6 +846,7 @@ final class FileManagerDialog {
         boolean available = !active && !busy && !loading;
         if (moreButton != null) moreButton.setEnabled(available);
         if (searchButton != null) searchButton.setEnabled(available);
+        if (locationsButton != null) locationsButton.setEnabled(available);
         if (refreshButton != null) refreshButton.setEnabled(available);
         if (selectionMore != null) selectionMore.setEnabled(!busy);
         if (upButton != null) {
@@ -605,8 +862,14 @@ final class FileManagerDialog {
 
     private List<Entry> selectedEntries() {
         List<Entry> result = new ArrayList<>();
+        Set<String> seen = new HashSet<>();
         for (Entry entry : allEntries) {
-            if (selection.contains(entry.file.getAbsolutePath())) result.add(entry);
+            String path = entry.file.getAbsolutePath();
+            if (selection.contains(path) && seen.add(path)) result.add(entry);
+        }
+        for (Entry entry : searchResults) {
+            String path = entry.file.getAbsolutePath();
+            if (selection.contains(path) && seen.add(path)) result.add(entry);
         }
         return result;
     }
@@ -617,34 +880,51 @@ final class FileManagerDialog {
 
     private void showEntryActions(final Entry entry) {
         final List<Runnable> actions = new ArrayList<>();
-        if (entry.file.isDirectory()) {
-            actions.add(() -> navigateTo(entry.file));
-            actions.add(() -> openProject(entry));
-        } else {
-            actions.add(() -> openFile(entry));
-        }
-        actions.add(() -> shareEntries(Collections.singletonList(entry)));
-        actions.add(() -> copyPath(entry.file));
-        actions.add(() -> copyToClipboard(Collections.singletonList(entry), false));
-        actions.add(() -> copyToClipboard(Collections.singletonList(entry), true));
-        actions.add(() -> promptRename(entry));
-        actions.add(() -> showDetails(entry));
-        actions.add(() -> confirmDelete(entry));
-
         List<String> labels = new ArrayList<>();
+
         if (entry.file.isDirectory()) {
             labels.add(activity.getString(R.string.opencode_files_open_folder));
+            actions.add(() -> navigateTo(entry.file));
             labels.add(activity.getString(R.string.opencode_files_open_project));
+            actions.add(() -> openProject(entry));
         } else {
             labels.add(activity.getString(R.string.opencode_files_open_file));
+            actions.add(() -> openFile(entry, false));
+            labels.add(activity.getString(R.string.opencode_files_open_with));
+            actions.add(() -> openFile(entry, true));
+            if (!entry.symlink && FileManagerUtils.isTextFile(entry.file)) {
+                labels.add(activity.getString(R.string.opencode_files_edit_text));
+                actions.add(() -> editText(entry));
+            }
         }
+
+        if (entry.relativePath != null) {
+            labels.add(activity.getString(R.string.opencode_files_open_containing_folder));
+            actions.add(() -> openContainingFolder(entry));
+        }
+
         labels.add(activity.getString(R.string.opencode_files_share));
+        actions.add(() -> shareEntries(Collections.singletonList(entry)));
         labels.add(activity.getString(R.string.opencode_files_copy_path));
+        actions.add(() -> copyPath(entry.file));
         labels.add(activity.getString(R.string.opencode_files_copy));
+        actions.add(() -> copyToClipboard(Collections.singletonList(entry), false));
         labels.add(activity.getString(R.string.opencode_files_move));
+        actions.add(() -> copyToClipboard(Collections.singletonList(entry), true));
         labels.add(activity.getString(R.string.opencode_files_rename));
-        labels.add(activity.getString(R.string.opencode_files_details));
+        actions.add(() -> promptRename(entry));
+        if (!entry.symlink) {
+            labels.add(activity.getString(R.string.opencode_files_compress));
+            actions.add(() -> compressEntries(Collections.singletonList(entry)));
+        }
+        if (!entry.symlink && FileManagerUtils.isZipArchive(entry.file)) {
+            labels.add(activity.getString(R.string.opencode_files_extract));
+            actions.add(() -> extractArchive(entry));
+        }
+        labels.add(activity.getString(R.string.opencode_files_properties));
+        actions.add(() -> showDetails(entry));
         labels.add(activity.getString(R.string.opencode_files_delete));
+        actions.add(() -> confirmDelete(entry));
 
         new MaterialAlertDialogBuilder(activity)
             .setTitle(entry.file.getName())
@@ -655,19 +935,42 @@ final class FileManagerDialog {
             .show();
     }
 
+    private void openContainingFolder(Entry entry) {
+        File parent = entry.file.getParentFile();
+        if (parent != null && parent.isDirectory()) {
+            navigateTo(parent);
+        } else {
+            toast(R.string.opencode_files_reveal_failed);
+        }
+    }
+
+    private void editText(Entry entry) {
+        if (entry.symlink) {
+            toast(R.string.opencode_files_editor_symlink);
+            return;
+        }
+        boolean writable = isSafeToModify(entry.file) && entry.file.canWrite();
+        TextEditorDialog.show(activity, entry.file, writable, file -> reload());
+    }
+
     private void openProject(Entry entry) {
         if (!entry.file.isDirectory()) return;
         if (dialog != null) dialog.dismiss();
         listener.onOpenProject(entry.file);
     }
 
-    private void openFile(Entry entry) {
+    private void openFile(Entry entry, boolean chooser) {
         try {
             Uri uri = uriFor(entry.file);
             Intent intent = new Intent(Intent.ACTION_VIEW)
                 .setDataAndType(uri, mimeType(entry.file))
                 .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-            activity.startActivity(intent);
+            if (chooser) {
+                activity.startActivity(Intent.createChooser(intent,
+                    activity.getString(R.string.opencode_files_open_with)));
+            } else {
+                activity.startActivity(intent);
+            }
         } catch (ActivityNotFoundException e) {
             Toast.makeText(activity, R.string.opencode_files_open_no_app,
                 Toast.LENGTH_LONG).show();
@@ -704,6 +1007,12 @@ final class FileManagerDialog {
         actions.add(() -> copyToClipboard(selected, false));
         labels.add(activity.getString(R.string.opencode_files_move));
         actions.add(() -> copyToClipboard(selected, true));
+        labels.add(activity.getString(R.string.opencode_files_selection_compress));
+        actions.add(() -> compressEntries(selected));
+        if (selected.size() == 1) {
+            labels.add(activity.getString(R.string.opencode_files_selection_properties));
+            actions.add(() -> showDetails(selected.get(0)));
+        }
         labels.add(activity.getString(R.string.opencode_files_select_all));
         actions.add(this::selectAllVisible);
         labels.add(activity.getString(R.string.opencode_files_deselect));
@@ -762,6 +1071,9 @@ final class FileManagerDialog {
                             throw new IOException("Cannot paste a directory into itself");
                         }
                         File target = uniqueTarget(destination, source.getName());
+                        if (!isSafeToModify(target)) {
+                            throw new IOException("Protected destination");
+                        }
                         if (move) {
                             if (!isSafeToModify(source)) {
                                 throw new IOException("Protected source");
@@ -868,63 +1180,136 @@ final class FileManagerDialog {
     }
 
     private void showDetails(final Entry entry) {
-        long initialSize = entry.file.isDirectory() ? DETAILS_CALCULATING : entry.size;
-        final AlertDialog details = new MaterialAlertDialogBuilder(activity)
-            .setTitle(entry.file.getName())
-            .setMessage(buildDetails(entry, initialSize))
-            .setPositiveButton(R.string.opencode_files_close, null)
-            .show();
-        if (!entry.file.isDirectory()) return;
+        boolean canModify = isSafeToModify(entry.file);
+        FilePropertiesDialog.show(activity, entry.file, canModify, file -> reload());
+    }
+
+    /* ==========================================================================================
+     * ZIP compression and extraction
+     * ========================================================================================== */
+
+    /** Compress the given entries into a ZIP archive next to them. */
+    private void compressEntries(final List<Entry> selected) {
+        if (busy || loading) {
+            toast(R.string.opencode_files_busy);
+            return;
+        }
+        if (selected == null || selected.isEmpty()) return;
+        final List<File> sources = new ArrayList<>();
+        for (Entry entry : selected) {
+            if (entry == null || entry.file == null) continue;
+            // A symlink is never compressed: addToZip would silently skip it and leave an
+            // empty archive behind.
+            if (FileManagerUtils.isSymbolicLink(entry.file)) continue;
+            sources.add(entry.file);
+        }
+        if (sources.isEmpty()) {
+            toast(R.string.opencode_files_compress_failed);
+            return;
+        }
+
+        String base = sources.size() == 1
+            ? safeFileName(sources.get(0).getName())
+            : safeFileName(currentDirectory == null ? "files" : currentDirectory.getName());
+        if (!base.toLowerCase(Locale.ROOT).endsWith(".zip")) base += ".zip";
+
+        final File destination = FileManagerUtils.uniqueTarget(
+            currentDirectory == null ? new File("/") : currentDirectory, base);
+        if (currentDirectory == null || !isSafeToModify(destination)) {
+            toast(R.string.opencode_files_modify_unsafe);
+            return;
+        }
+
+        busy = true;
+        temporaryStatus = activity.getString(R.string.opencode_files_compressing);
+        setProgressVisible(true);
+        setControlsEnabled(false);
+        updateSummary();
 
         executor.execute(() -> {
-            final long size = measureSize(entry.file);
+            String error = null;
+            try {
+                FileManagerUtils.createZip(sources, destination, name -> {
+                    if (Thread.currentThread().isInterrupted()) return false;
+                    return true;
+                });
+            } catch (Throwable t) {
+                error = t.getMessage();
+                destination.delete();
+            }
+            final String failure = error;
             activity.runOnUiThread(() -> {
-                if (!isAlive() || !details.isShowing()) return;
-                details.setMessage(buildDetails(entry, size));
+                busy = false;
+                temporaryStatus = null;
+                if (!isAlive()) return;
+                setProgressVisible(false);
+                setControlsEnabled(true);
+                if (failure != null) {
+                    toast(R.string.opencode_files_compress_failed);
+                } else {
+                    toast(activity.getString(R.string.opencode_files_compressed,
+                        destination.getName()));
+                }
+                reload();
             });
         });
     }
 
-    private String buildDetails(Entry entry, long size) {
-        String kind = describeKind(entry);
-        String sizeText;
-        if (size == DETAILS_CALCULATING) {
-            sizeText = activity.getString(R.string.opencode_files_details_calculating);
-        } else if (size < 0) {
-            sizeText = activity.getString(R.string.opencode_files_size_unknown);
-        } else {
-            sizeText = OpenCodeInstallDialog.formatSize(size);
+    /** Extract a ZIP archive into a new folder next to it. */
+    private void extractArchive(final Entry entry) {
+        if (busy || loading) {
+            toast(R.string.opencode_files_busy);
+            return;
         }
-        String date = entry.modified > 0
-            ? new SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault())
-                .format(new Date(entry.modified))
-            : activity.getString(R.string.opencode_files_time_unknown);
-        String type = entry.file.isDirectory() ? activity.getString(R.string.opencode_files_kind_dir)
-            : mimeType(entry.file);
-        return activity.getString(R.string.opencode_files_details_message,
-            entry.file.getAbsolutePath(), kind, type, sizeText, date);
-    }
+        if (entry == null || !FileManagerUtils.isZipArchive(entry.file)) return;
 
-    /** Recursively sum the size of a tree, without following symlinks. */
-    private static long measureSize(File root) {
-        ArrayDeque<File> stack = new ArrayDeque<>();
-        stack.push(root);
-        long total = 0;
-        int visited = 0;
-        while (!stack.isEmpty()) {
-            File file = stack.pop();
-            if (isSymbolicLink(file)) continue;
-            if (file.isFile()) {
-                total += Math.max(0, file.length());
-            } else if (file.isDirectory()) {
-                File[] children = file.listFiles();
-                if (children != null) {
-                    for (File child : children) stack.push(child);
-                }
-            }
-            if (++visited > MEASURE_LIMIT) return DETAILS_UNKNOWN;
+        String name = entry.file.getName();
+        int dot = name.lastIndexOf('.');
+        if (dot > 0) name = name.substring(0, dot);
+        else name = name + "-extracted";
+        name = safeFileName(name);
+        final File parent = entry.file.getParentFile();
+        if (parent == null || !isSafeToModify(entry.file)) {
+            toast(R.string.opencode_files_modify_unsafe);
+            return;
         }
-        return total;
+        final File destination = FileManagerUtils.uniqueTarget(parent, name);
+
+        busy = true;
+        temporaryStatus = activity.getString(R.string.opencode_files_extracting);
+        setProgressVisible(true);
+        setControlsEnabled(false);
+        updateSummary();
+
+        executor.execute(() -> {
+            int extracted = 0;
+            String error = null;
+            try {
+                extracted = FileManagerUtils.extractZip(entry.file, destination, path -> {
+                    if (Thread.currentThread().isInterrupted()) return false;
+                    return true;
+                });
+            } catch (Throwable t) {
+                error = t.getMessage();
+                FileManagerUtils.deleteRecursively(destination);
+            }
+            final int count = extracted;
+            final String failure = error;
+            activity.runOnUiThread(() -> {
+                busy = false;
+                temporaryStatus = null;
+                if (!isAlive()) return;
+                setProgressVisible(false);
+                setControlsEnabled(true);
+                if (failure != null) {
+                    toast(R.string.opencode_files_extract_failed);
+                } else {
+                    toast(activity.getString(R.string.opencode_files_extracted,
+                        count, destination.getName()));
+                }
+                reload();
+            });
+        });
     }
 
     /* ==========================================================================================
@@ -940,6 +1325,18 @@ final class FileManagerDialog {
                 ? R.string.opencode_files_paste_move : R.string.opencode_files_paste,
                 clipboard.size()));
             actions.add(this::pasteClipboard);
+        }
+
+        labels.add(activity.getString(R.string.opencode_files_locations));
+        actions.add(this::showLocations);
+        labels.add(activity.getString(R.string.opencode_files_go_to_path));
+        actions.add(this::promptGoToPath);
+        if (currentDirectory != null) {
+            boolean bookmarked = isBookmarked(currentDirectory);
+            labels.add(activity.getString(bookmarked
+                ? R.string.opencode_files_bookmark_remove
+                : R.string.opencode_files_bookmark_add));
+            actions.add(() -> toggleBookmark(currentDirectory));
         }
 
         if (!samePath(currentDirectory, home)) {
@@ -961,6 +1358,11 @@ final class FileManagerDialog {
         actions.add(this::createFolder);
         labels.add(activity.getString(R.string.opencode_files_new_file));
         actions.add(this::createFile);
+        if (currentDirectory != null) {
+            labels.add(activity.getString(R.string.opencode_files_compress_current));
+            actions.add(() -> compressEntries(Collections.singletonList(
+                new Entry(currentDirectory))));
+        }
         labels.add(activity.getString(searchRow != null && searchRow.getVisibility() == View.VISIBLE
             ? R.string.opencode_files_search_close : R.string.opencode_files_search));
         actions.add(this::toggleSearch);
@@ -978,6 +1380,178 @@ final class FileManagerDialog {
 
         new MaterialAlertDialogBuilder(activity)
             .setTitle(String.valueOf(currentDirectory == null ? "" : pathView.getText()))
+            .setItems(labels.toArray(new CharSequence[0]), (dialog, which) -> {
+                if (which >= 0 && which < actions.size()) actions.get(which).run();
+            })
+            .setNegativeButton(R.string.opencode_files_cancel, null)
+            .show();
+    }
+
+    /* ==========================================================================================
+     * Locations, bookmarks and go-to-path
+     * ========================================================================================== */
+
+    private void showLocations() {
+        final List<Runnable> actions = new ArrayList<>();
+        List<String> labels = new ArrayList<>();
+
+        labels.add(activity.getString(R.string.opencode_files_location_home));
+        actions.add(() -> navigateTo(home));
+        File filesDir = TermuxConstants.TERMUX_FILES_DIR;
+        if (filesDir != null && filesDir.isDirectory()) {
+            labels.add(activity.getString(R.string.opencode_files_location_files));
+            actions.add(() -> navigateTo(filesDir));
+        }
+        File primary = StorageAccess.primaryRoot();
+        if (primary != null) {
+            labels.add(activity.getString(R.string.opencode_files_location_internal));
+            actions.add(() -> navigateTo(primary));
+        }
+        for (File root : StorageAccess.volumeRoots(activity)) {
+            if (StorageAccess.isPrimaryRoot(root)) continue;
+            labels.add(activity.getString(R.string.opencode_files_location_sd, root.getName()));
+            actions.add(() -> navigateTo(root));
+        }
+        File dataDir = TermuxConstants.TERMUX_INTERNAL_PRIVATE_APP_DATA_DIR;
+        if (dataDir.isDirectory()) {
+            labels.add(activity.getString(R.string.opencode_files_location_app_data));
+            actions.add(() -> navigateTo(dataDir));
+        }
+        labels.add(activity.getString(R.string.opencode_files_location_root));
+        actions.add(() -> navigateTo(new File("/")));
+
+        if (!bookmarks.isEmpty()) {
+            labels.add(activity.getString(R.string.opencode_files_bookmarks));
+            actions.add(this::showBookmarks);
+        }
+
+        new MaterialAlertDialogBuilder(activity)
+            .setTitle(R.string.opencode_files_locations_title)
+            .setItems(labels.toArray(new CharSequence[0]), (dialog, which) -> {
+                if (which >= 0 && which < actions.size()) actions.get(which).run();
+            })
+            .setNegativeButton(R.string.opencode_files_cancel, null)
+            .show();
+    }
+
+    private void showBookmarks() {
+        final List<Runnable> actions = new ArrayList<>();
+        List<String> labels = new ArrayList<>();
+        for (String path : bookmarks) {
+            final File directory = new File(path);
+            labels.add(directory.getName().isEmpty() ? path : directory.getName());
+            actions.add(() -> {
+                if (directory.isDirectory()) navigateTo(directory);
+                else toast(R.string.opencode_files_go_to_path_invalid);
+            });
+        }
+        new MaterialAlertDialogBuilder(activity)
+            .setTitle(R.string.opencode_files_bookmarks)
+            .setItems(labels.toArray(new CharSequence[0]), (dialog, which) -> {
+                if (which >= 0 && which < actions.size()) actions.get(which).run();
+            })
+            .setNegativeButton(R.string.opencode_files_cancel, null)
+            .show();
+    }
+
+    private void loadBookmarks() {
+        bookmarks.clear();
+        String raw = preferences.getString(PREF_BOOKMARKS, null);
+        if (raw == null || raw.isEmpty()) return;
+        try {
+            JSONArray array = new JSONArray(raw);
+            for (int i = 0; i < array.length(); i++) {
+                String path = array.optString(i, null);
+                if (path != null && !path.isEmpty() && !bookmarks.contains(path)) {
+                    bookmarks.add(path);
+                }
+            }
+        } catch (Throwable ignored) {
+            // A corrupted bookmark list is simply ignored.
+        }
+    }
+
+    private void saveBookmarks() {
+        JSONArray array = new JSONArray();
+        for (String path : bookmarks) array.put(path);
+        preferences.edit().putString(PREF_BOOKMARKS, array.toString()).apply();
+    }
+
+    private boolean isBookmarked(File directory) {
+        if (directory == null) return false;
+        String path = directory.getAbsolutePath();
+        for (String bookmark : bookmarks) {
+            if (bookmark.equals(path)) return true;
+        }
+        return false;
+    }
+
+    private void toggleBookmark(File directory) {
+        if (directory == null) return;
+        String path = directory.getAbsolutePath();
+        if (bookmarks.remove(path)) {
+            toast(R.string.opencode_files_bookmark_removed);
+        } else {
+            bookmarks.add(path);
+            toast(R.string.opencode_files_bookmark_added);
+        }
+        saveBookmarks();
+    }
+
+    private void promptGoToPath() {
+        final EditText input = new EditText(activity);
+        input.setSingleLine(true);
+        input.setInputType(InputType.TYPE_CLASS_TEXT);
+        input.setHint(R.string.opencode_files_go_to_path_hint);
+        input.setText(currentDirectory == null ? "" : currentDirectory.getAbsolutePath());
+        input.setSelection(input.getText().length());
+
+        FrameLayout wrapper = new FrameLayout(activity);
+        int padding = dp(20);
+        wrapper.setPadding(padding, dp(6), padding, 0);
+        wrapper.addView(input, new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        new MaterialAlertDialogBuilder(activity)
+            .setTitle(R.string.opencode_files_go_to_path)
+            .setView(wrapper)
+            .setPositiveButton(R.string.opencode_files_manage, (dialog, which) -> {
+                String text = input.getText() == null ? "" : input.getText().toString().trim();
+                if (text.isEmpty()) return;
+                if (text.equals("~")) text = home.getAbsolutePath();
+                else if (text.startsWith("~/")) {
+                    text = home.getAbsolutePath() + text.substring(1);
+                }
+                File target = new File(text);
+                if (!target.isAbsolute()) target = new File(currentDirectory, text);
+                if (target.isDirectory()) {
+                    navigateTo(target);
+                } else {
+                    toast(R.string.opencode_files_go_to_path_invalid);
+                }
+            })
+            .setNegativeButton(R.string.opencode_files_cancel, null)
+            .show();
+    }
+
+    private void showPathActions() {
+        if (currentDirectory == null) return;
+        String path = currentDirectory.getAbsolutePath();
+        final List<Runnable> actions = new ArrayList<>();
+        List<String> labels = new ArrayList<>();
+        labels.add(activity.getString(R.string.opencode_files_path_copy));
+        actions.add(() -> copyPath(currentDirectory));
+        labels.add(activity.getString(R.string.opencode_files_go_to_path));
+        actions.add(this::promptGoToPath);
+        labels.add(activity.getString(R.string.opencode_files_locations));
+        actions.add(this::showLocations);
+        labels.add(activity.getString(isBookmarked(currentDirectory)
+            ? R.string.opencode_files_bookmark_remove
+            : R.string.opencode_files_bookmark_add));
+        actions.add(() -> toggleBookmark(currentDirectory));
+
+        new MaterialAlertDialogBuilder(activity)
+            .setTitle(path)
             .setItems(labels.toArray(new CharSequence[0]), (dialog, which) -> {
                 if (which >= 0 && which < actions.size()) actions.get(which).run();
             })
@@ -1476,19 +2050,68 @@ final class FileManagerDialog {
     }
 
     private void showSortDialog() {
-        List<String> labels = Arrays.asList(
+        LinearLayout content = new LinearLayout(activity);
+        content.setOrientation(LinearLayout.VERTICAL);
+        int padding = dp(20);
+        content.setPadding(padding, dp(6), padding, 0);
+
+        final String[] fields = {
             activity.getString(R.string.opencode_files_sort_name),
             activity.getString(R.string.opencode_files_sort_size),
-            activity.getString(R.string.opencode_files_sort_modified));
+            activity.getString(R.string.opencode_files_sort_modified),
+            activity.getString(R.string.opencode_files_sort_type)
+        };
+
+        RadioGroup group = new RadioGroup(activity);
+        group.setOrientation(RadioGroup.VERTICAL);
+        final RadioButton[] buttons = new RadioButton[fields.length];
+        for (int i = 0; i < fields.length; i++) {
+            RadioButton button = new RadioButton(activity);
+            button.setId(View.generateViewId());
+            button.setText(fields[i]);
+            group.addView(button);
+            buttons[i] = button;
+        }
+        int checked = sortMode >= 0 && sortMode < buttons.length ? sortMode : 0;
+        buttons[checked].setChecked(true);
+        content.addView(group);
+
+        final CheckBox ascending = new CheckBox(activity);
+        ascending.setText(R.string.opencode_files_sort_ascending);
+        ascending.setChecked(sortAscending);
+        content.addView(ascending);
+
+        final CheckBox dirsFirst = new CheckBox(activity);
+        dirsFirst.setText(R.string.opencode_files_sort_dirs_first);
+        dirsFirst.setChecked(directoriesFirst);
+        content.addView(dirsFirst);
+
         new MaterialAlertDialogBuilder(activity)
             .setTitle(R.string.opencode_files_sort)
-            .setSingleChoiceItems(labels.toArray(new CharSequence[0]), sortMode,
-                (dialog, which) -> {
-                    sortMode = which;
-                    preferences.edit().putInt(PREF_SORT, sortMode).apply();
-                    dialog.dismiss();
+            .setView(content)
+            .setPositiveButton(R.string.opencode_files_sort_apply, (dialog, which) -> {
+                int selected = 0;
+                for (int i = 0; i < buttons.length; i++) {
+                    if (buttons[i].isChecked()) {
+                        selected = i;
+                        break;
+                    }
+                }
+                sortMode = selected;
+                sortAscending = ascending.isChecked();
+                directoriesFirst = dirsFirst.isChecked();
+                preferences.edit()
+                    .putInt(PREF_SORT, sortMode)
+                    .putBoolean(PREF_SORT_ASCENDING, sortAscending)
+                    .putBoolean(PREF_DIRS_FIRST, directoriesFirst)
+                    .apply();
+                if (recursiveSearch && !query.trim().isEmpty()) {
+                    searchQuery = "";
+                    rebuildVisibleEntries();
+                } else {
                     reload();
-                })
+                }
+            })
             .setNegativeButton(R.string.opencode_files_cancel, null)
             .show();
     }
@@ -1600,7 +2223,7 @@ final class FileManagerDialog {
     }
 
     private String describe(Entry entry) {
-        String kind = describeKind(entry);
+        String kind = entry.relativePath != null ? entry.relativePath : describeKind(entry);
         String size;
         if (entry.file.isDirectory()) {
             size = activity.getString(R.string.opencode_files_size_folder);
@@ -1631,6 +2254,7 @@ final class FileManagerDialog {
 
     private static final class Entry {
         final File file;
+        String relativePath;
         long size = DETAILS_UNKNOWN;
         long modified;
         boolean directory;
@@ -1682,6 +2306,8 @@ final class FileManagerDialog {
                     iconRes = R.drawable.ic_github_branch;
                 } else if (entry.file.isDirectory()) {
                     iconRes = R.drawable.ic_folder;
+                } else if (FileManagerUtils.isZipArchive(entry.file)) {
+                    iconRes = R.drawable.ic_archive;
                 } else {
                     iconRes = R.drawable.ic_file;
                 }
