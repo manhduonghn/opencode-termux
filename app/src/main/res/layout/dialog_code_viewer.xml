@@ -6,7 +6,7 @@
     android:background="?android:attr/colorBackground"
     android:orientation="vertical">
 
-    <!-- App-style header, the viewer is a full screen screen instead of a dialog -->
+    <!-- App-style header, the editor is a full screen screen instead of a dialog -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -64,16 +64,6 @@
             app:tint="@color/github_muted" />
 
         <ImageButton
-            android:id="@+id/code_viewer_edit"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="@string/opencode_files_viewer_edit"
-            android:padding="10dp"
-            android:src="@drawable/ic_edit"
-            app:tint="@color/github_muted" />
-
-        <ImageButton
             android:id="@+id/code_viewer_save"
             android:layout_width="40dp"
             android:layout_height="40dp"
@@ -101,10 +91,21 @@
         android:layout_marginTop="4dp"
         android:layout_weight="1">
 
-        <WebView
-            android:id="@+id/code_viewer_web"
+        <EditText
+            android:id="@+id/code_viewer_input"
             android:layout_width="match_parent"
-            android:layout_height="match_parent" />
+            android:layout_height="match_parent"
+            android:background="@drawable/bg_github_input"
+            android:fontFamily="monospace"
+            android:gravity="top|start"
+            android:imeOptions="flagNoExtractUi"
+            android:importantForAutofill="no"
+            android:inputType="textMultiLine|textNoSuggestions"
+            android:padding="12dp"
+            android:scrollbars="vertical|horizontal"
+            android:textColor="?android:attr/textColorPrimary"
+            android:textColorHint="?android:attr/textColorHint"
+            android:textSize="14sp" />
 
         <TextView
             android:id="@+id/code_viewer_error"

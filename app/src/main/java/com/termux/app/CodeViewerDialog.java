@@ -1,32 +1,30 @@
 package com.termux.app;
 
-import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.app.Dialog;
 import android.content.ActivityNotFoundException;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
-import android.content.res.Configuration;
 import android.graphics.Color;
+import android.graphics.Typeface;
 import android.graphics.drawable.ColorDrawable;
 import android.net.Uri;
-import android.os.Handler;
-import android.os.Looper;
+import android.os.SystemClock;
+import android.text.Editable;
 import android.text.InputType;
+import android.text.Layout;
+import android.text.TextWatcher;
+import android.util.TypedValue;
+import android.view.Gravity;
 import android.view.KeyEvent;
 import android.view.LayoutInflater;
 import android.view.MenuItem;
 import android.view.View;
-import android.view.ViewGroup;
 import android.view.Window;
 import android.view.WindowManager;
-import android.webkit.JavascriptInterface;
-import android.webkit.WebChromeClient;
-import android.webkit.WebResourceRequest;
-import android.webkit.WebSettings;
-import android.webkit.WebView;
-import android.webkit.WebViewClient;
+import android.view.inputmethod.EditorInfo;
+import android.view.inputmethod.InputMethodManager;
 import android.widget.EditText;
 import android.widget.ImageButton;
 import android.widget.PopupMenu;
@@ -40,29 +38,25 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.termux.BuildConfig;
 import com.termux.R;
 
-import org.json.JSONException;
-import org.json.JSONObject;
-
 import java.io.File;
 import java.io.IOException;
 import java.lang.ref.WeakReference;
+import java.util.ArrayDeque;
+import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 /**
- * An in-app code viewer and editor, modelled after the
- * <a href="https://github.com/Acode-Foundation/Acode">Acode</a> editor: the file is rendered
- * with CodeMirror 5 inside a WebView ({@code assets/editor/editor.html}) and offers syntax
- * highlighting for the languages of the CodeMirror modes bundled with the app, line numbers,
- * search, undo/redo, go to line and word wrap. Tapping a text or code file in the file
- * manager opens it here instead of handing it to another app.
+ * A small in-app text viewer and editor for the file manager. Text and code files are
+ * shown in a plain monospace {@link EditText}, with no WebView involved: the content is
+ * read and written directly, so it works even when the device has no usable WebView and
+ * the editing is immediate. Writable files open ready to type; files that must not be
+ * changed (symbolic links, protected paths) open read only.
  *
- * <p>The page talks to this dialog through the {@code AndroidBridge} object injected with
- * {@link WebView#addJavascriptInterface}: the content itself is pulled from Java with
- * {@code fetchContent()} so that large files never travel through
- * {@code evaluateJavascript()}, which is limited by the binder transaction size. Saving
- * uses the atomic {@link FileManagerUtils#writeText} that preserves the POSIX mode, and a
- * file that turned into a symbolic link while the viewer was open is never written.</p>
+ * <p>While the file is open the toolbar offers search, undo/redo, go to line, word wrap,
+ * font size, reload, share, open with another app and properties. Saving uses the atomic
+ * {@link FileManagerUtils#writeText}, which preserves the POSIX mode, and a file that
+ * turned into a symbolic link while the editor was open is never written.</p>
  */
 final class CodeViewerDialog {
 
@@ -75,17 +69,16 @@ final class CodeViewerDialog {
     private static final String PREFS_NAME = "opencode_cfg";
     private static final String PREF_WRAP = "code_viewer_wrap";
     private static final String PREF_FONT_SIZE = "code_viewer_font_size";
-
-    private static final String ASSET_URL = "file:///android_asset/editor/editor.html";
-    private static final String BRIDGE_NAME = "AndroidBridge";
-    private static final String THEME_DARK = "material-darker";
-    private static final String THEME_LIGHT = "eclipse";
     private static final String FILE_PROVIDER_SUFFIX = ".fileprovider";
 
     private static final int DEFAULT_FONT_SIZE = 14;
     private static final int MIN_FONT_SIZE = 8;
     private static final int MAX_FONT_SIZE = 28;
-    private static final long PAGE_TIMEOUT_MS = 15_000L;
+
+    /** Undo keeps at most this many snapshots, and is disabled for very large files. */
+    private static final int UNDO_LIMIT = 30;
+    private static final int UNDO_MAX_TEXT = 200_000;
+    private static final long UNDO_DEBOUNCE_MS = 600L;
 
     private static final int ID_UNDO = 1;
     private static final int ID_REDO = 2;
@@ -104,13 +97,13 @@ final class CodeViewerDialog {
     private final Activity activity;
     private final File file;
     private final boolean canWrite;
+    private final boolean startEditing;
     private final Listener listener;
     private final SharedPreferences preferences;
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
 
     private Dialog dialog;
-    private WebView webView;
-    private final Handler handler = new Handler(Looper.getMainLooper());
+    private EditText editor;
     private TextView titleView;
     private TextView subtitleView;
     private TextView statusView;
@@ -118,40 +111,37 @@ final class CodeViewerDialog {
     private ProgressBar progressView;
     private ImageButton closeButton;
     private ImageButton searchButton;
-    private ImageButton editButton;
     private ImageButton saveButton;
     private ImageButton moreButton;
 
-    /** The file content as it is on disk, read on the executor before it is pushed to the page. */
-    private volatile String originalContent;
-    private boolean pageReady;
-    private boolean contentReady;
-    private boolean editing;
-    private boolean dirty;
+    /** The file content as it is on disk. */
+    private String original = "";
+    private boolean loaded;
+    private boolean modified;
     private boolean saving;
+    /** Set while the text is changed programmatically, so the watcher does not react. */
+    private boolean suppressWatcher;
     private boolean wrap;
     private int fontSize;
-    private int cursorLine = 1;
-    private int cursorColumn = 1;
-    private String language = "Text";
-    private final String theme;
+    private String lastQuery = "";
+
+    private final ArrayDeque<Snapshot> undoStack = new ArrayDeque<>();
+    private final ArrayDeque<Snapshot> redoStack = new ArrayDeque<>();
+    private long lastUndoAt;
 
     private CodeViewerDialog(Activity activity, File file, boolean canWrite, boolean startEditing,
-                            Listener listener) {
+                             Listener listener) {
         this.activity = activity;
         this.file = file;
         this.canWrite = canWrite;
-        this.editing = canWrite && startEditing;
+        this.startEditing = canWrite && startEditing;
         this.listener = listener;
         this.preferences = activity.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
         this.wrap = preferences.getBoolean(PREF_WRAP, true);
         this.fontSize = preferences.getInt(PREF_FONT_SIZE, DEFAULT_FONT_SIZE);
-        int nightMode = activity.getResources().getConfiguration().uiMode
-            & Configuration.UI_MODE_NIGHT_MASK;
-        this.theme = nightMode == Configuration.UI_MODE_NIGHT_YES ? THEME_DARK : THEME_LIGHT;
     }
 
-    /** Show the file, starting in edit mode when requested and allowed. Must run on the UI thread. */
+    /** Show the file, ready to edit when it is writable. Must run on the UI thread. */
     static void show(Activity activity, File file, boolean canWrite, boolean startEditing,
                      Listener listener) {
         if (activity == null || file == null || activity.isFinishing()
@@ -182,22 +172,20 @@ final class CodeViewerDialog {
         progressView = view.findViewById(R.id.code_viewer_progress);
         closeButton = view.findViewById(R.id.code_viewer_close);
         searchButton = view.findViewById(R.id.code_viewer_search);
-        editButton = view.findViewById(R.id.code_viewer_edit);
         saveButton = view.findViewById(R.id.code_viewer_save);
         moreButton = view.findViewById(R.id.code_viewer_more);
-        webView = view.findViewById(R.id.code_viewer_web);
+        editor = view.findViewById(R.id.code_viewer_input);
 
         titleView.setText(file.getName());
         File parent = file.getParentFile();
         subtitleView.setText(parent == null ? file.getAbsolutePath() : parent.getAbsolutePath());
+        configureEditor();
         updateToolbar();
         updateStatus();
-        configureWebView();
 
         closeButton.setOnClickListener(v -> handleBack());
-        searchButton.setOnClickListener(v -> evaluate("window.editorApi.openSearch()"));
-        editButton.setOnClickListener(v -> beginEditing());
-        saveButton.setOnClickListener(v -> requestSave());
+        searchButton.setOnClickListener(v -> promptFind());
+        saveButton.setOnClickListener(v -> save());
         moreButton.setOnClickListener(v -> showMenu());
 
         dialog = new Dialog(activity, R.style.Theme_Opencode_FullScreenDialog);
@@ -205,8 +193,6 @@ final class CodeViewerDialog {
         dialog.setCanceledOnTouchOutside(false);
         dialog.setOnDismissListener(d -> {
             executor.shutdownNow();
-            handler.removeCallbacksAndMessages(null);
-            destroyWebView();
             if (activeDialog != null && activeDialog.get() == this) activeDialog = null;
         });
         dialog.setOnKeyListener((d, keyCode, event) -> {
@@ -224,13 +210,13 @@ final class CodeViewerDialog {
             window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
         }
 
-        readContent(false);
+        load();
     }
 
     /** Confirm unsaved changes, then close. */
     private boolean handleBack() {
         if (saving) return true;
-        if (dirty) {
+        if (modified) {
             confirmDiscard(null);
             return true;
         }
@@ -238,58 +224,48 @@ final class CodeViewerDialog {
         return true;
     }
 
-    @SuppressLint("SetJavaScriptEnabled")
-    private void configureWebView() {
-        WebSettings settings = webView.getSettings();
-        settings.setJavaScriptEnabled(true);
-        // Only the bundled editor page is ever needed: deny everything else, including
-        // the file system (android_asset stays reachable by design) and the network.
-        settings.setAllowFileAccess(false);
-        settings.setAllowContentAccess(false);
-        settings.setAllowFileAccessFromFileURLs(false);
-        settings.setAllowUniversalAccessFromFileURLs(false);
-        settings.setBlockNetworkLoads(true);
-        settings.setSupportZoom(false);
-        settings.setBuiltInZoomControls(false);
-        settings.setTextZoom(100);
-        webView.setBackgroundColor(Color.TRANSPARENT);
-        webView.setWebChromeClient(new WebChromeClient());
-        webView.setWebViewClient(new WebViewClient() {
+    private void configureEditor() {
+        editor.setTypeface(Typeface.MONOSPACE);
+        editor.setGravity(Gravity.TOP | Gravity.START);
+        editor.setImeOptions(EditorInfo.IME_FLAG_NO_EXTRACT_UI);
+        editor.setTextSize(TypedValue.COMPLEX_UNIT_SP, fontSize);
+        applyWrap();
+        if (canWrite) {
+            editor.setInputType(InputType.TYPE_CLASS_TEXT
+                | InputType.TYPE_TEXT_FLAG_MULTI_LINE
+                | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
+        } else {
+            // Read only, but the text stays selectable so it can be copied.
+            editor.setInputType(InputType.TYPE_NULL);
+            editor.setTextIsSelectable(true);
+        }
+        editor.addTextChangedListener(new TextWatcher() {
             @Override
-            public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
-                return true;
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {
+                if (suppressWatcher || !loaded) return;
+                recordUndo(s == null ? "" : s.toString());
+            }
+
+            @Override
+            public void onTextChanged(CharSequence s, int start, int before, int count) {
+            }
+
+            @Override
+            public void afterTextChanged(Editable s) {
+                if (suppressWatcher || !loaded) return;
+                String text = s == null ? "" : s.toString();
+                modified = text.length() != original.length() || !text.equals(original);
+                updateToolbar();
+                updateStatus();
             }
         });
-        webView.addJavascriptInterface(new Bridge(), BRIDGE_NAME);
-        webView.loadUrl(ASSET_URL);
-        // If the page never initialises, for example because the device WebView is
-        // missing or broken, stop waiting instead of spinning forever.
-        handler.postDelayed(() -> {
-            if (isAlive() && !pageReady) {
-                showError(activity.getString(R.string.opencode_files_viewer_init_failed));
-            }
-        }, PAGE_TIMEOUT_MS);
-    }
-
-    private void destroyWebView() {
-        if (webView == null) return;
-        webView.stopLoading();
-        webView.loadUrl("about:blank");
-        webView.setWebViewClient(null);
-        webView.setWebChromeClient(null);
-        if (webView.getParent() instanceof ViewGroup) {
-            ((ViewGroup) webView.getParent()).removeView(webView);
-        }
-        webView.destroy();
-        webView = null;
     }
 
     /* ==========================================================================================
      * Content
      * ========================================================================================== */
 
-    /** Read the file on the executor; {@code reload} replaces an already shown document. */
-    private void readContent(final boolean reload) {
+    private void load() {
         setBusy(true, R.string.opencode_files_editor_loading);
         executor.execute(() -> {
             String text = null;
@@ -303,74 +279,46 @@ final class CodeViewerDialog {
             final String loadedError = error;
             activity.runOnUiThread(() -> {
                 if (!isAlive()) return;
+                setBusy(false, 0);
                 if (loadedError != null) {
                     showError(loadedError);
                     return;
                 }
-                originalContent = loadedText == null ? "" : loadedText;
-                if (reload) {
-                    dirty = false;
-                    updateToolbar();
-                    evaluate("window.editorApi.reload()");
-                } else {
-                    contentReady = true;
-                    maybePushDocument();
+                original = loadedText == null ? "" : loadedText;
+                suppressWatcher = true;
+                editor.setText(original);
+                editor.setSelection(0);
+                suppressWatcher = false;
+                undoStack.clear();
+                redoStack.clear();
+                loaded = true;
+                modified = false;
+                if (errorView != null) errorView.setVisibility(View.GONE);
+                if (editor != null) editor.setVisibility(View.VISIBLE);
+                updateToolbar();
+                updateStatus();
+                if (startEditing) {
+                    editor.requestFocus();
+                    showKeyboard();
                 }
             });
         });
     }
 
-    /** Push the document once both the page and the content are ready. */
-    private void maybePushDocument() {
-        if (!pageReady || !contentReady) return;
-        JSONObject payload = new JSONObject();
-        try {
-            payload.put("fileName", file.getName());
-            payload.put("readOnly", !editing);
-            payload.put("wrap", wrap);
-            payload.put("fontSize", fontSize);
-            payload.put("theme", theme);
-        } catch (JSONException e) {
-            showError(activity.getString(R.string.opencode_files_editor_read_failed));
-            return;
-        }
-        setBusy(false, 0);
-        if (errorView != null) errorView.setVisibility(View.GONE);
-        evaluate("window.editorApi.setDocument(" + payload.toString() + ")");
-    }
-
-    private void beginEditing() {
-        if (!isAlive()) return;
+    private void save() {
+        if (!isAlive() || saving || !loaded) return;
         if (!canWrite) {
             toast(R.string.opencode_files_editor_read_only);
             return;
         }
-        if (editing) return;
-        editing = true;
-        evaluate("window.editorApi.setEditable(true)");
-        updateToolbar();
-        updateStatus();
-    }
-
-    /** Ask the page for the current content; the answer arrives in {@link Bridge#saveContent}. */
-    private void requestSave() {
-        if (!isAlive() || saving) return;
-        if (!editing || !canWrite) {
-            toast(R.string.opencode_files_editor_read_only);
-            return;
-        }
-        evaluate("window.editorApi.getContent()");
-    }
-
-    private void saveDocument(String content) {
-        if (!isAlive() || !editing || !canWrite || saving || content == null) return;
+        if (!modified) return;
+        final String text = currentText();
         saving = true;
         setBusy(true, R.string.opencode_files_editor_saving);
-        final String text = content;
         executor.execute(() -> {
             String error = null;
             try {
-                // The file could have been replaced by a symlink while the viewer was open.
+                // The file could have been replaced by a symlink while the editor was open.
                 if (FileManagerUtils.isSymbolicLink(file)) {
                     throw new IOException("File is now a symbolic link");
                 }
@@ -388,9 +336,8 @@ final class CodeViewerDialog {
                         R.string.opencode_files_editor_save_failed, savedError));
                     return;
                 }
-                originalContent = text;
-                dirty = false;
-                evaluate("window.editorApi.markClean()");
+                original = text;
+                modified = false;
                 updateToolbar();
                 updateStatus();
                 toast(R.string.opencode_files_editor_saved);
@@ -400,103 +347,84 @@ final class CodeViewerDialog {
     }
 
     /* ==========================================================================================
-     * Toolbar and menu
+     * Undo and redo
      * ========================================================================================== */
 
-    private void updateToolbar() {
-        if (editButton != null) {
-            editButton.setVisibility(editing ? View.GONE : View.VISIBLE);
+    private void recordUndo(String oldText) {
+        long now = SystemClock.uptimeMillis();
+        // Coalesce the edits of one typing burst into a single undo step.
+        if (!undoStack.isEmpty() && now - lastUndoAt < UNDO_DEBOUNCE_MS) {
+            lastUndoAt = now;
+            return;
         }
-        if (saveButton != null) {
-            saveButton.setVisibility(editing ? View.VISIBLE : View.GONE);
-            saveButton.setEnabled(dirty && !saving);
-            saveButton.setAlpha(dirty && !saving ? 1.0f : 0.4f);
+        lastUndoAt = now;
+        if (oldText.length() > UNDO_MAX_TEXT) return;
+        undoStack.push(new Snapshot(oldText, editor.getSelectionStart(), editor.getSelectionEnd()));
+        while (undoStack.size() > UNDO_LIMIT) undoStack.removeLast();
+        redoStack.clear();
+    }
+
+    private void undo() {
+        if (undoStack.isEmpty()) return;
+        redoStack.push(new Snapshot(currentText(), editor.getSelectionStart(),
+            editor.getSelectionEnd()));
+        restore(undoStack.pop());
+    }
+
+    private void redo() {
+        if (redoStack.isEmpty()) return;
+        undoStack.push(new Snapshot(currentText(), editor.getSelectionStart(),
+            editor.getSelectionEnd()));
+        restore(redoStack.pop());
+    }
+
+    private void restore(Snapshot snapshot) {
+        suppressWatcher = true;
+        editor.setText(snapshot.text);
+        int length = editor.getText() == null ? 0 : editor.getText().length();
+        editor.setSelection(Math.min(snapshot.start, length), Math.min(snapshot.end, length));
+        suppressWatcher = false;
+        modified = !snapshot.text.equals(original);
+        lastUndoAt = 0;
+        updateToolbar();
+        updateStatus();
+    }
+
+    /* ==========================================================================================
+     * Search, go to line, wrap and font size
+     * ========================================================================================== */
+
+    private void promptFind() {
+        EditText input = new EditText(activity);
+        input.setSingleLine(true);
+        input.setHint(R.string.opencode_files_viewer_find_hint);
+        input.setText(lastQuery);
+        input.setSelection(input.getText().length());
+        new MaterialAlertDialogBuilder(activity)
+            .setTitle(R.string.opencode_files_viewer_search)
+            .setView(input)
+            .setPositiveButton(R.string.opencode_picker_go, (d, which) -> {
+                String query = input.getText() == null ? "" : input.getText().toString();
+                findNext(query);
+            })
+            .setNegativeButton(R.string.opencode_files_cancel, null)
+            .show();
+    }
+
+    private void findNext(String query) {
+        if (editor == null || query == null || query.isEmpty()) return;
+        lastQuery = query;
+        String text = currentText();
+        int from = editor.getSelectionEnd();
+        if (from < 0 || from > text.length()) from = 0;
+        int index = text.indexOf(query, from);
+        if (index < 0 && from > 0) index = text.indexOf(query);
+        if (index < 0) {
+            toast(R.string.opencode_files_viewer_not_found);
+            return;
         }
-    }
-
-    private void updateStatus() {
-        if (statusView == null) return;
-        String status = activity.getString(R.string.opencode_files_viewer_status,
-            cursorLine, cursorColumn, language);
-        if (!canWrite) {
-            status += " · " + activity.getString(R.string.opencode_files_editor_read_only);
-        }
-        if (dirty) {
-            status += " · " + activity.getString(R.string.opencode_files_editor_modified);
-        }
-        statusView.setText(status);
-    }
-
-    private void showMenu() {
-        PopupMenu menu = new PopupMenu(activity, moreButton);
-        android.view.Menu items = menu.getMenu();
-        items.add(0, ID_UNDO, 0, R.string.opencode_files_viewer_undo);
-        items.add(0, ID_REDO, 0, R.string.opencode_files_viewer_redo);
-        items.add(0, ID_GOTO, 0, R.string.opencode_files_viewer_goto_line);
-        MenuItem wrapItem = items.add(0, ID_WRAP, 0, R.string.opencode_files_viewer_wrap);
-        wrapItem.setCheckable(true);
-        wrapItem.setChecked(wrap);
-        items.add(0, ID_FONT_SMALLER, 0, R.string.opencode_files_viewer_font_smaller);
-        items.add(0, ID_FONT_LARGER, 0, R.string.opencode_files_viewer_font_larger);
-        items.add(0, ID_RELOAD, 0, R.string.opencode_files_viewer_reload);
-        items.add(0, ID_SHARE, 0, R.string.opencode_files_share);
-        items.add(0, ID_OPEN_WITH, 0, R.string.opencode_files_open_with);
-        items.add(0, ID_PROPERTIES, 0, R.string.opencode_files_details);
-        menu.setOnMenuItemClickListener(item -> {
-            switch (item.getItemId()) {
-                case ID_UNDO:
-                    evaluate("window.editorApi.undo()");
-                    return true;
-                case ID_REDO:
-                    evaluate("window.editorApi.redo()");
-                    return true;
-                case ID_GOTO:
-                    promptGotoLine();
-                    return true;
-                case ID_WRAP:
-                    toggleWrap();
-                    return true;
-                case ID_FONT_SMALLER:
-                    changeFontSize(-1);
-                    return true;
-                case ID_FONT_LARGER:
-                    changeFontSize(1);
-                    return true;
-                case ID_RELOAD:
-                    confirmDiscard(this::readContentFromDisk);
-                    return true;
-                case ID_SHARE:
-                    shareFile();
-                    return true;
-                case ID_OPEN_WITH:
-                    openWithOtherApp();
-                    return true;
-                case ID_PROPERTIES:
-                    FilePropertiesDialog.show(activity, file, canWrite, null);
-                    return true;
-                default:
-                    return false;
-            }
-        });
-        menu.show();
-    }
-
-    private void readContentFromDisk() {
-        readContent(true);
-    }
-
-    private void toggleWrap() {
-        wrap = !wrap;
-        preferences.edit().putBoolean(PREF_WRAP, wrap).apply();
-        evaluate("window.editorApi.setLineWrapping(" + wrap + ")");
-    }
-
-    private void changeFontSize(int direction) {
-        int newSize = Math.max(MIN_FONT_SIZE, Math.min(MAX_FONT_SIZE, fontSize + direction));
-        if (newSize == fontSize) return;
-        fontSize = newSize;
-        preferences.edit().putInt(PREF_FONT_SIZE, fontSize).apply();
-        evaluate("window.editorApi.setFontSize(" + fontSize + ")");
+        editor.requestFocus();
+        editor.setSelection(index, index + query.length());
     }
 
     private void promptGotoLine() {
@@ -518,15 +446,148 @@ final class CodeViewerDialog {
                     toast(R.string.opencode_files_viewer_goto_invalid);
                     return;
                 }
-                evaluate("window.editorApi.gotoLine(" + line + ")");
+                gotoLine(line);
             })
             .setNegativeButton(R.string.opencode_files_cancel, null)
             .show();
     }
 
+    private void gotoLine(int line) {
+        if (editor == null) return;
+        String text = currentText();
+        int offset = 0;
+        for (int i = 1; i < line && offset < text.length(); i++) {
+            int newline = text.indexOf('\n', offset);
+            if (newline < 0) {
+                offset = text.length();
+                break;
+            }
+            offset = newline + 1;
+        }
+        editor.requestFocus();
+        editor.setSelection(Math.min(offset, text.length()));
+    }
+
+    private void toggleWrap() {
+        wrap = !wrap;
+        preferences.edit().putBoolean(PREF_WRAP, wrap).apply();
+        applyWrap();
+    }
+
+    private void applyWrap() {
+        if (editor == null) return;
+        // Without wrapping the view keeps the lines on one line and scrolls horizontally.
+        editor.setHorizontallyScrolling(!wrap);
+        editor.requestLayout();
+    }
+
+    private void changeFontSize(int direction) {
+        int newSize = Math.max(MIN_FONT_SIZE, Math.min(MAX_FONT_SIZE, fontSize + direction));
+        if (newSize == fontSize) return;
+        fontSize = newSize;
+        preferences.edit().putInt(PREF_FONT_SIZE, fontSize).apply();
+        if (editor != null) editor.setTextSize(TypedValue.COMPLEX_UNIT_SP, fontSize);
+    }
+
+    /* ==========================================================================================
+     * Toolbar and menu
+     * ========================================================================================== */
+
+    private void updateToolbar() {
+        if (saveButton != null) {
+            saveButton.setVisibility(canWrite ? View.VISIBLE : View.GONE);
+            boolean enabled = canWrite && loaded && modified && !saving;
+            saveButton.setEnabled(enabled);
+            saveButton.setAlpha(enabled ? 1.0f : 0.4f);
+        }
+    }
+
+    private void updateStatus() {
+        if (statusView == null || editor == null || !loaded) return;
+        int line = 1;
+        int column = 1;
+        int selection = editor.getSelectionStart();
+        Layout layout = editor.getLayout();
+        if (layout != null && selection >= 0) {
+            int lineIndex = layout.getLineForOffset(selection);
+            line = lineIndex + 1;
+            column = selection - layout.getLineStart(lineIndex) + 1;
+        }
+        String status = activity.getString(R.string.opencode_files_viewer_status,
+            line, column, languageLabel());
+        if (!canWrite) {
+            status += " · " + activity.getString(R.string.opencode_files_editor_read_only);
+        }
+        if (modified) {
+            status += " · " + activity.getString(R.string.opencode_files_editor_modified);
+        }
+        statusView.setText(status);
+    }
+
+    private String languageLabel() {
+        String name = file.getName();
+        int dot = name.lastIndexOf('.');
+        if (dot < 0 || dot == name.length() - 1) return "Text";
+        return name.substring(dot + 1).toUpperCase(Locale.ROOT);
+    }
+
+    private void showMenu() {
+        PopupMenu menu = new PopupMenu(activity, moreButton);
+        android.view.Menu items = menu.getMenu();
+        items.add(0, ID_UNDO, 0, R.string.opencode_files_viewer_undo);
+        items.add(0, ID_REDO, 0, R.string.opencode_files_viewer_redo);
+        items.add(0, ID_GOTO, 0, R.string.opencode_files_viewer_goto_line);
+        MenuItem wrapItem = items.add(0, ID_WRAP, 0, R.string.opencode_files_viewer_wrap);
+        wrapItem.setCheckable(true);
+        wrapItem.setChecked(wrap);
+        items.add(0, ID_FONT_SMALLER, 0, R.string.opencode_files_viewer_font_smaller);
+        items.add(0, ID_FONT_LARGER, 0, R.string.opencode_files_viewer_font_larger);
+        items.add(0, ID_RELOAD, 0, R.string.opencode_files_viewer_reload);
+        items.add(0, ID_SHARE, 0, R.string.opencode_files_share);
+        items.add(0, ID_OPEN_WITH, 0, R.string.opencode_files_open_with);
+        items.add(0, ID_PROPERTIES, 0, R.string.opencode_files_details);
+        menu.setOnMenuItemClickListener(item -> {
+            switch (item.getItemId()) {
+                case ID_UNDO:
+                    undo();
+                    return true;
+                case ID_REDO:
+                    redo();
+                    return true;
+                case ID_GOTO:
+                    promptGotoLine();
+                    return true;
+                case ID_WRAP:
+                    toggleWrap();
+                    return true;
+                case ID_FONT_SMALLER:
+                    changeFontSize(-1);
+                    return true;
+                case ID_FONT_LARGER:
+                    changeFontSize(1);
+                    return true;
+                case ID_RELOAD:
+                    confirmDiscard(this::load);
+                    return true;
+                case ID_SHARE:
+                    shareFile();
+                    return true;
+                case ID_OPEN_WITH:
+                    openWithOtherApp();
+                    return true;
+                case ID_PROPERTIES:
+                    FilePropertiesDialog.show(activity, file, canWrite, null);
+                    return true;
+                default:
+                    return false;
+            }
+        });
+        menu.show();
+    }
+
     private void confirmDiscard(Runnable onDiscard) {
         if (saving) return;
-        if (!dirty) {
+        if (!modified) {
             if (onDiscard != null) onDiscard.run();
             else dismiss();
             return;
@@ -535,7 +596,7 @@ final class CodeViewerDialog {
             .setTitle(R.string.opencode_files_editor_discard_title)
             .setMessage(R.string.opencode_files_editor_discard_message)
             .setPositiveButton(R.string.opencode_files_editor_discard, (d, which) -> {
-                dirty = false;
+                modified = false;
                 updateToolbar();
                 if (onDiscard != null) onDiscard.run();
                 else dismiss();
@@ -578,89 +639,27 @@ final class CodeViewerDialog {
     }
 
     /* ==========================================================================================
-     * Bridge, helpers
+     * Helpers
      * ========================================================================================== */
 
-    /**
-     * The object that the editor page calls. The methods run on the WebView's JavaBridge
-     * thread, so everything except {@link #fetchContent()} is posted back to the UI thread.
-     */
-    private final class Bridge {
-
-        @JavascriptInterface
-        public void onReady() {
-            activity.runOnUiThread(() -> {
-                if (!isAlive()) return;
-                handler.removeCallbacksAndMessages(null);
-                pageReady = true;
-                maybePushDocument();
-            });
-        }
-
-        @JavascriptInterface
-        public String fetchContent() {
-            String content = originalContent;
-            return content == null ? "" : content;
-        }
-
-        @JavascriptInterface
-        public void onDirtyChanged(final boolean value) {
-            activity.runOnUiThread(() -> {
-                if (!isAlive()) return;
-                dirty = value;
-                updateToolbar();
-                updateStatus();
-            });
-        }
-
-        @JavascriptInterface
-        public void onCursor(final int line, final int column) {
-            activity.runOnUiThread(() -> {
-                if (!isAlive()) return;
-                cursorLine = line;
-                cursorColumn = column;
-                updateStatus();
-            });
-        }
-
-        @JavascriptInterface
-        public void onMode(final String label) {
-            activity.runOnUiThread(() -> {
-                if (!isAlive()) return;
-                language = label == null || label.trim().isEmpty() ? "Text" : label.trim();
-                updateStatus();
-            });
-        }
-
-        @JavascriptInterface
-        public void saveContent(final String content) {
-            activity.runOnUiThread(() -> saveDocument(content));
-        }
-
-        @JavascriptInterface
-        public void requestSave() {
-            activity.runOnUiThread(() -> {
-                if (isAlive()) CodeViewerDialog.this.requestSave();
-            });
-        }
-
-        @JavascriptInterface
-        public void onError(final String message) {
-            activity.runOnUiThread(() -> {
-                if (!isAlive() || message == null) return;
-                toast(activity.getString(
-                    R.string.opencode_files_viewer_script_error, message));
-            });
-        }
+    private String currentText() {
+        return editor == null || editor.getText() == null ? "" : editor.getText().toString();
     }
 
-    private void evaluate(String script) {
-        if (webView != null && pageReady) webView.evaluateJavascript(script, null);
+    private void showKeyboard() {
+        if (editor == null) return;
+        InputMethodManager manager =
+            (InputMethodManager) activity.getSystemService(Context.INPUT_METHOD_SERVICE);
+        if (manager != null) manager.showSoftInput(editor, InputMethodManager.SHOW_IMPLICIT);
     }
 
     private void setBusy(boolean busy, int messageResId) {
         if (progressView != null) progressView.setVisibility(busy ? View.VISIBLE : View.GONE);
-        if (saveButton != null) saveButton.setEnabled(!busy && dirty && editing);
+        if (saveButton != null) {
+            boolean enabled = canWrite && loaded && modified && !busy;
+            saveButton.setEnabled(enabled);
+            saveButton.setAlpha(enabled ? 1.0f : 0.4f);
+        }
         if (statusView != null) {
             if (busy && messageResId != 0) {
                 statusView.setText(messageResId);
@@ -672,6 +671,7 @@ final class CodeViewerDialog {
 
     private void showError(String message) {
         setBusy(false, 0);
+        if (editor != null) editor.setVisibility(View.GONE);
         if (errorView != null) {
             errorView.setText(message);
             errorView.setVisibility(View.VISIBLE);
@@ -689,5 +689,18 @@ final class CodeViewerDialog {
 
     private void toast(String message) {
         Toast.makeText(activity, message, Toast.LENGTH_LONG).show();
+    }
+
+    /** A single undo/redo state: the text and the selection that produced it. */
+    private static final class Snapshot {
+        final String text;
+        final int start;
+        final int end;
+
+        Snapshot(String text, int start, int end) {
+            this.text = text;
+            this.start = start;
+            this.end = end;
+        }
     }
 }

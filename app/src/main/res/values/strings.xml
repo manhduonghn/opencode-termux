@@ -414,9 +414,10 @@
     <string name="opencode_files_editor_discard">Bỏ thay đổi</string>
     <string name="opencode_files_editor_keep">Tiếp tục sửa</string>
 
-    <!-- In-app code viewer, modelled after the Acode editor -->
+    <!-- In-app text viewer and editor (native, no WebView) -->
     <string name="opencode_files_viewer_search">Tìm trong tệp</string>
-    <string name="opencode_files_viewer_edit">Chỉnh sửa</string>
+    <string name="opencode_files_viewer_find_hint">Nội dung cần tìm</string>
+    <string name="opencode_files_viewer_not_found">Không tìm thấy</string>
     <string name="opencode_files_viewer_undo">Hoàn tác</string>
     <string name="opencode_files_viewer_redo">Làm lại</string>
     <string name="opencode_files_viewer_wrap">Cuộn dòng dài</string>
@@ -427,8 +428,6 @@
     <string name="opencode_files_viewer_goto_invalid">Số dòng không hợp lệ</string>
     <string name="opencode_files_viewer_reload">Tải lại từ đĩa</string>
     <string name="opencode_files_viewer_status">Dòng %1$d, cột %2$d · %3$s</string>
-    <string name="opencode_files_viewer_script_error">Lỗi trình xem code: %1$s</string>
-    <string name="opencode_files_viewer_init_failed">Không mở được trình xem code. Kiểm tra WebView hệ thống rồi thử lại.</string>
     <string name="opencode_files_selection_compress">Nén mục đã chọn</string>
     <string name="opencode_files_selection_properties">Thông tin mục đã chọn</string>
 
