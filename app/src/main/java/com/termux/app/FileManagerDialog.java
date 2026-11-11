@@ -26,7 +26,6 @@ import android.view.Window;
 import android.view.WindowManager;
 import android.view.inputmethod.InputMethodManager;
 import android.webkit.MimeTypeMap;
-import android.widget.AdapterView;
 import android.widget.BaseAdapter;
 import android.widget.CheckBox;
 import android.widget.EditText;
@@ -287,35 +286,10 @@ final class FileManagerDialog {
         gridView.setAdapter(adapter);
         updateViewMode();
 
-        AdapterView.OnItemClickListener itemClick = (parent, item, position, id) -> {
-            if (busy || loading) return;
-            if (position < 0 || position >= entries.size()) return;
-            Entry entry = entries.get(position);
-            if (selectionMode) {
-                toggleSelection(entry);
-            } else if (entry.file.isDirectory()) {
-                navigateTo(entry.file);
-            } else {
-                openEntry(entry);
-            }
-        };
-        AdapterView.OnItemLongClickListener itemLongClick = (parent, item, position, id) -> {
-            if (busy || loading) return false;
-            if (position < 0 || position >= entries.size()) return false;
-            Entry entry = entries.get(position);
-            if (selectionMode) {
-                toggleSelection(entry);
-            } else {
-                // Material Files behaviour: a long press starts multi-select instead of
-                // forcing the user through an action menu before anything can happen.
-                beginSelection(entry);
-            }
-            return true;
-        };
-        listView.setOnItemClickListener(itemClick);
-        listView.setOnItemLongClickListener(itemLongClick);
-        gridView.setOnItemClickListener(itemClick);
-        gridView.setOnItemLongClickListener(itemLongClick);
+        // Taps are handled by the row views themselves, see EntryAdapter.getView(). Relying on
+        // ListView.setOnItemClickListener made a tap do nothing on some devices: AbsListView
+        // silently skips the item click whenever the row reports a focusable descendant, which
+        // the per-row overflow button could trigger. A listener on the row itself always fires.
 
         upButton.setOnClickListener(v -> {
             File parent = currentDirectory == null ? null : currentDirectory.getParentFile();
@@ -1130,6 +1104,35 @@ final class FileManagerDialog {
             viewCode(entry, false);
         } else {
             openFile(entry, false);
+        }
+    }
+
+    /**
+     * Handle a tap on a row: open directories and files, or toggle the row while selecting.
+     * Attached to the row view itself so that the tap always works.
+     */
+    private void handleEntryClick(Entry entry) {
+        if (busy || loading || entry == null) return;
+        if (selectionMode) {
+            toggleSelection(entry);
+        } else if (entry.file.isDirectory()) {
+            navigateTo(entry.file);
+        } else {
+            openEntry(entry);
+        }
+    }
+
+    /**
+     * Handle a long press on a row: start multi-select, or toggle the row when already
+     * selecting. Material Files behaviour, a long press does not force the user through an
+     * action menu before anything can happen.
+     */
+    private void handleEntryLongClick(Entry entry) {
+        if (busy || loading || entry == null) return;
+        if (selectionMode) {
+            toggleSelection(entry);
+        } else {
+            beginSelection(entry);
         }
     }
 
@@ -2460,6 +2463,14 @@ final class FileManagerDialog {
                     parent, false);
             }
             final Entry entry = getItem(position);
+            // Handle the tap on the row view itself. This guarantees that tapping opens the
+            // entry even though the row contains the clickable overflow button, which would
+            // otherwise make AbsListView skip the item click.
+            view.setOnClickListener(v -> handleEntryClick(entry));
+            view.setOnLongClickListener(v -> {
+                handleEntryLongClick(entry);
+                return true;
+            });
             TextView name = view.findViewById(R.id.managed_file_name);
             TextView meta = view.findViewById(R.id.managed_file_meta);
             ImageView icon = view.findViewById(R.id.managed_file_icon);
