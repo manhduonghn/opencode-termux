@@ -32,7 +32,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="@string/startup_progress_title"
-                android:textColor="@color/app_text"
+                android:textColor="?attr/colorOnSurface"
                 android:textSize="17sp"
                 android:textStyle="bold" />
 
@@ -42,7 +42,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="2dp"
                 android:text="@string/startup_progress_subtitle"
-                android:textColor="@color/app_muted"
+                android:textColor="?attr/colorOnSurfaceVariant"
                 android:textSize="12sp" />
         </LinearLayout>
 
@@ -59,7 +59,7 @@
             android:paddingEnd="10dp"
             android:paddingBottom="5dp"
             android:text="…"
-            android:textColor="@color/app_accent"
+            android:textColor="?attr/colorPrimary"
             android:textSize="12sp"
             android:textStyle="bold" />
     </LinearLayout>
@@ -71,7 +71,7 @@
         android:layout_height="6dp"
         android:layout_marginTop="18dp"
         android:indeterminate="true"
-        android:indeterminateTint="@color/app_accent"
+        android:indeterminateTint="?attr/colorPrimary"
         android:max="100"
         android:progressDrawable="@drawable/bg_app_progress" />
 
@@ -81,7 +81,7 @@
         android:layout_height="wrap_content"
         android:layout_marginTop="16dp"
         android:lineSpacingExtra="2dp"
-        android:textColor="@color/app_text"
+        android:textColor="?attr/colorOnSurface"
         android:textSize="14sp" />
 
     <TextView
@@ -89,7 +89,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="4dp"
-        android:textColor="@color/app_muted"
+        android:textColor="?attr/colorOnSurfaceVariant"
         android:textSize="12sp"
         android:visibility="gone" />
 
@@ -104,7 +104,7 @@
         android:maxLines="6"
         android:padding="12dp"
         android:text="@string/startup_progress_log_empty"
-        android:textColor="@color/app_muted"
+        android:textColor="?attr/colorOnSurfaceVariant"
         android:textSize="11sp" />
 
     <TextView
@@ -113,7 +113,7 @@
         android:layout_marginTop="16dp"
         android:lineSpacingExtra="2dp"
         android:text="@string/startup_progress_hint"
-        android:textColor="@color/app_muted"
+        android:textColor="?attr/colorOnSurfaceVariant"
         android:textSize="12sp" />
 
 </LinearLayout>

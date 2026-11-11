@@ -40,7 +40,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:text="@string/opencode_web_brand_subtitle"
-                    android:textColor="@color/app_muted"
+                    android:textColor="?attr/colorOnSurfaceVariant"
                     android:textSize="11sp" />
             </LinearLayout>
 
@@ -53,7 +53,7 @@
                 android:contentDescription="@string/opencode_files_access"
                 android:padding="10dp"
                 android:src="@drawable/ic_folder"
-                app:tint="@color/app_muted" />
+                app:tint="?attr/colorOnSurfaceVariant" />
 
             <ImageButton
                 android:id="@+id/opencode_web_reload_button"
@@ -63,7 +63,7 @@
                 android:contentDescription="@string/opencode_web_reload"
                 android:padding="11dp"
                 android:src="@drawable/ic_refresh"
-                app:tint="@color/app_muted" />
+                app:tint="?attr/colorOnSurfaceVariant" />
 
             <ImageButton
                 android:id="@+id/opencode_web_settings_button"
@@ -74,21 +74,23 @@
                 android:contentDescription="@string/opencode_settings"
                 android:padding="10dp"
                 android:src="@drawable/ic_settings"
-                app:tint="@color/app_muted" />
+                app:tint="?attr/colorOnSurfaceVariant" />
         </LinearLayout>
 
         <View
             android:layout_width="match_parent"
             android:layout_height="1dp"
-            android:background="@color/app_stroke" />
+            android:background="?attr/colorOutlineVariant" />
 
         <FrameLayout
             android:layout_width="match_parent"
             android:layout_height="0dp"
             android:layout_weight="1">
 
-            <WebView
-                android:id="@+id/opencode_web_view"
+            <!-- The OpenCode WebView is created and retained by OpenCodeWebViewModel and attached
+                 here, so it survives an activity recreation without reloading the page. -->
+            <FrameLayout
+                android:id="@+id/opencode_web_container"
                 android:layout_width="match_parent"
                 android:layout_height="match_parent" />
 
@@ -131,7 +133,7 @@
                     android:layout_marginTop="2dp"
                     android:gravity="center"
                     android:text="@string/opencode_web_brand_caption"
-                    android:textColor="@color/app_muted"
+                    android:textColor="?attr/colorOnSurfaceVariant"
                     android:textSize="12sp" />
 
                 <ProgressBar
@@ -139,7 +141,7 @@
                     android:layout_width="34dp"
                     android:layout_height="34dp"
                     android:layout_marginTop="28dp"
-                    android:indeterminateTint="@color/app_accent" />
+                    android:indeterminateTint="?attr/colorPrimary" />
 
                 <TextView
                     android:id="@+id/opencode_web_status_text"
@@ -153,16 +155,16 @@
 
                 <Button
                     android:id="@+id/opencode_web_retry"
-                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                    style="@style/Widget.Material3.Button.OutlinedButton"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="20dp"
                     android:minHeight="44dp"
                     android:text="@string/opencode_web_retry"
                     android:textAllCaps="false"
-                    android:textColor="@color/app_accent"
+                    android:textColor="?attr/colorPrimary"
                     android:visibility="gone"
-                    app:strokeColor="@color/app_stroke" />
+                    app:strokeColor="?attr/colorOutlineVariant" />
 
                 <TextView
                     android:layout_width="match_parent"
@@ -171,7 +173,7 @@
                     android:gravity="center"
                     android:lineSpacingExtra="2dp"
                     android:text="@string/opencode_web_first_run_hint"
-                    android:textColor="@color/app_muted"
+                    android:textColor="?attr/colorOnSurfaceVariant"
                     android:textSize="12sp" />
                 </LinearLayout>
             </ScrollView>
@@ -215,7 +217,7 @@
                         android:layout_height="wrap_content"
                         android:layout_marginTop="2dp"
                         android:text="@string/opencode_settings_subtitle"
-                        android:textColor="@color/app_muted"
+                        android:textColor="?attr/colorOnSurfaceVariant"
                         android:textSize="12sp" />
                 </LinearLayout>
 
@@ -227,7 +229,7 @@
                     android:contentDescription="@string/close"
                     android:padding="11dp"
                     android:src="@drawable/ic_close"
-                    app:tint="@color/app_muted" />
+                    app:tint="?attr/colorOnSurfaceVariant" />
             </LinearLayout>
 
             <!-- Updates -->
@@ -237,7 +239,7 @@
                 android:layout_marginTop="16dp"
                 android:letterSpacing="0.08"
                 android:text="@string/opencode_updates"
-                android:textColor="@color/github_muted"
+                android:textColor="?attr/colorOnSurfaceVariant"
                 android:textSize="12sp"
                 android:textStyle="bold" />
 
@@ -263,7 +265,7 @@
                         android:contentDescription="@string/opencode_updates"
                         android:padding="9dp"
                         android:src="@drawable/ic_refresh"
-                        app:tint="@color/github_muted" />
+                        app:tint="?attr/colorOnSurfaceVariant" />
 
                     <LinearLayout
                         android:layout_width="0dp"
@@ -284,7 +286,7 @@
                             android:layout_height="wrap_content"
                             android:layout_marginTop="2dp"
                             android:text="@string/opencode_updates_subtitle"
-                            android:textColor="@color/github_muted"
+                            android:textColor="?attr/colorOnSurfaceVariant"
                             android:textSize="12sp" />
                     </LinearLayout>
                 </LinearLayout>
@@ -295,7 +297,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="10dp"
                     android:textSize="13sp"
-                    android:textColor="@color/github_muted" />
+                    android:textColor="?attr/colorOnSurfaceVariant" />
 
                 <TextView
                     android:id="@+id/opencode_updates_status"
@@ -312,28 +314,28 @@
 
                     <Button
                         android:id="@+id/opencode_updates_check_button"
-                        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                        style="@style/Widget.Material3.Button.OutlinedButton"
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
                         android:minHeight="44dp"
                         android:text="@string/opencode_updates_check"
                         android:textAllCaps="false"
-                        android:textColor="@color/github_accent"
-                        app:strokeColor="@color/github_surface_stroke" />
+                        android:textColor="?attr/colorPrimary"
+                        app:strokeColor="?attr/colorOutlineVariant" />
 
                     <Button
                         android:id="@+id/opencode_updates_update_button"
-                        style="@style/Widget.MaterialComponents.Button"
+                        style="@style/Widget.Material3.Button"
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
                         android:layout_marginStart="8dp"
                         android:minHeight="44dp"
-                        android:backgroundTint="@color/github_accent"
+                        android:backgroundTint="?attr/colorPrimary"
                         android:text="@string/opencode_updates_update_now"
                         android:textAllCaps="false"
-                        android:textColor="@color/white"
+                        android:textColor="?attr/colorOnPrimary"
                         android:visibility="gone" />
                 </LinearLayout>
             </LinearLayout>
@@ -345,7 +347,7 @@
                 android:layout_marginTop="20dp"
                 android:letterSpacing="0.08"
                 android:text="@string/opencode_battery_title"
-                android:textColor="@color/github_muted"
+                android:textColor="?attr/colorOnSurfaceVariant"
                 android:textSize="12sp"
                 android:textStyle="bold" />
 
@@ -377,20 +379,20 @@
                         android:layout_height="wrap_content"
                         android:layout_marginTop="2dp"
                         android:text="@string/opencode_battery_wakelock_desc"
-                        android:textColor="@color/github_muted"
+                        android:textColor="?attr/colorOnSurfaceVariant"
                         android:textSize="12sp" />
                 </LinearLayout>
 
                 <Button
                     android:id="@+id/opencode_wakelock_install_btn"
-                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                    style="@style/Widget.Material3.Button.OutlinedButton"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:minHeight="40dp"
                     android:text="@string/opencode_battery_wakelock_install"
                     android:textAllCaps="false"
-                    android:textColor="@color/github_accent"
-                    app:strokeColor="@color/github_surface_stroke" />
+                    android:textColor="?attr/colorPrimary"
+                    app:strokeColor="?attr/colorOutlineVariant" />
 
                 <androidx.appcompat.widget.SwitchCompat
                     android:id="@+id/opencode_wakelock_switch"
@@ -405,7 +407,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="6dp"
-                android:textColor="@color/github_muted"
+                android:textColor="?attr/colorOnSurfaceVariant"
                 android:textSize="12sp" />
 
             <TextView
@@ -416,7 +418,7 @@
                 android:ellipsize="end"
                 android:fontFamily="monospace"
                 android:maxLines="4"
-                android:textColor="@color/github_muted"
+                android:textColor="?attr/colorOnSurfaceVariant"
                 android:textSize="11sp"
                 android:visibility="gone" />
 

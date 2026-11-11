@@ -14,7 +14,10 @@ import android.os.Bundle;
 import android.os.SystemClock;
 import androidx.annotation.NonNull;
 import android.view.View;
+import android.view.ViewGroup;
+import android.view.ViewParent;
 import android.webkit.CookieManager;
+import android.webkit.JsResult;
 import android.webkit.PermissionRequest;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
@@ -27,6 +30,7 @@ import android.webkit.WebViewClient;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.CompoundButton;
+import android.widget.FrameLayout;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 
@@ -36,6 +40,7 @@ import androidx.core.content.ContextCompat;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.lifecycle.ViewModelProvider;
 
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.termux.R;
@@ -88,7 +93,9 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
     /** Absolute path of the last project that was opened from the folder picker. */
     private static final String PREF_LAST_PROJECT_DIR = "storage_last_project_dir";
 
+    /** The WebView retained by {@link OpenCodeWebViewModel} across activity recreation. */
     private WebView mWebView;
+    private OpenCodeWebViewModel mViewModel;
     private View mStatusView;
     private ProgressBar mProgressBar;
     private TextView mStatusText;
@@ -122,24 +129,19 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
     private boolean mServiceStoppedReceiverRegistered = false;
 
     private boolean mStarted = false;
-    private boolean mWebUiStarted = false;
     private boolean mReloadWebAfterInstall = false;
-    private boolean mAuthCompleted = false;
-    private boolean mPageError = false;
-
-    /**
-     * Incremented for every load attempt. A result from a start thread that finished after the
-     * user reloaded, exited and reopened the app, is discarded so that it cannot overwrite the
-     * state of the newer load.
-     */
-    private int mLoadGeneration = 0;
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_opencode_web);
 
-        mWebView = findViewById(R.id.opencode_web_view);
+        // The WebView is owned by the ViewModel, so it survives an activity recreation (for
+        // example a light/dark mode switch) instead of being recreated and reloaded.
+        mViewModel = new ViewModelProvider(this).get(OpenCodeWebViewModel.class);
+        mWebView = mViewModel.getOrCreateWebView(this);
+        attachWebView();
+
         mStatusView = findViewById(R.id.opencode_web_status);
         mProgressBar = findViewById(R.id.opencode_web_progress);
         mStatusText = findViewById(R.id.opencode_web_status_text);
@@ -188,6 +190,7 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
         getWindow().getDecorView().post(() -> handleOpenDirectoryIntent(getIntent()));
 
         configureWebView();
+        restoreWebUiState();
         requestNotificationPermissionIfNeeded();
         ensureRuntime();
     }
@@ -278,11 +281,18 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
             mFilePathCallback = null;
         }
         if (mWebView != null) {
-            mWebView.stopLoading();
+            // Detach the retained WebView from this activity's view tree and drop the clients that
+            // reference this activity. The WebView itself is only stopped and destroyed by the
+            // ViewModel when the activity is really finishing, so a configuration change (for
+            // example a light/dark switch or a rotation) keeps the loaded page and any load that
+            // is still in progress.
             mWebView.setWebChromeClient(null);
             mWebView.setWebViewClient(null);
-            mWebView.destroy();
-            mWebView = null;
+            View container = findViewById(R.id.opencode_web_container);
+            ViewParent parent = mWebView.getParent();
+            if (parent != null && parent == container) {
+                ((ViewGroup) parent).removeView(mWebView);
+            }
         }
         super.onDestroy();
     }
@@ -460,6 +470,28 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
         }
     }
 
+    /** Attach the retained WebView to the container of the current activity layout. */
+    private void attachWebView() {
+        FrameLayout container = findViewById(R.id.opencode_web_container);
+        if (container == null || mWebView == null) return;
+
+        ViewParent parent = mWebView.getParent();
+        if (parent instanceof ViewGroup) {
+            ((ViewGroup) parent).removeView(mWebView);
+        }
+        container.addView(mWebView, new FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
+    }
+
+    /**
+     * After a recreation the layout starts with the loading overlay visible. Hide it again when the
+     * retained WebView already shows the authenticated web UI.
+     */
+    private void restoreWebUiState() {
+        if (mViewModel.isPageError()) return;
+        if (mViewModel.isAuthCompleted()) showContent();
+    }
+
     private void configureWebView() {
         WebSettings settings = mWebView.getSettings();
         settings.setJavaScriptEnabled(true);
@@ -491,14 +523,15 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
                 super.onPageFinished(view, url);
                 if (isFinishing() || isDestroyed()) return;
 
-                if (!mPageError && !mAuthCompleted && url != null && !url.contains("/auth/connect/")) {
-                    mAuthCompleted = true;
+                if (!mViewModel.isPageError() && !mViewModel.isAuthCompleted()
+                        && url != null && !url.contains("/auth/connect/")) {
+                    mViewModel.setAuthCompleted(true);
                     // Drop the one time pair redirect from the history, so the system back
                     // button leaves the web UI instead of showing the expired pair page.
                     view.clearHistory();
                 }
 
-                if (!mPageError) showContent();
+                if (!mViewModel.isPageError()) showContent();
             }
 
             @Override
@@ -551,6 +584,35 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
                     Logger.logStackTraceWithMessage(LOG_TAG, "No activity for the file chooser", e);
                     return false;
                 }
+            }
+
+            @Override
+            public boolean onJsAlert(WebView view, String url, String message, final JsResult result) {
+                if (isFinishing() || isDestroyed()) {
+                    result.cancel();
+                    return true;
+                }
+                new MaterialAlertDialogBuilder(OpenCodeWebActivity.this)
+                    .setMessage(message)
+                    .setPositiveButton(android.R.string.ok, (dialog, which) -> result.confirm())
+                    .setOnCancelListener(dialog -> result.cancel())
+                    .show();
+                return true;
+            }
+
+            @Override
+            public boolean onJsConfirm(WebView view, String url, String message, final JsResult result) {
+                if (isFinishing() || isDestroyed()) {
+                    result.cancel();
+                    return true;
+                }
+                new MaterialAlertDialogBuilder(OpenCodeWebActivity.this)
+                    .setMessage(message)
+                    .setPositiveButton(android.R.string.ok, (dialog, which) -> result.confirm())
+                    .setNegativeButton(android.R.string.cancel, (dialog, which) -> result.cancel())
+                    .setOnCancelListener(dialog -> result.cancel())
+                    .show();
+                return true;
             }
 
             @Override
@@ -607,7 +669,7 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
             return;
         }
 
-        if (mWebUiStarted) return;
+        if (mViewModel.isWebUiStarted()) return;
         loadWebUi();
     }
 
@@ -630,19 +692,15 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
 
     /** Forget everything about the current page and cancel a load that may still be running. */
     private void resetWebUiState() {
-        mLoadGeneration++;
-        mWebUiStarted = false;
-        mAuthCompleted = false;
-        mPageError = false;
-        if (mWebView != null) mWebView.stopLoading();
+        mViewModel.resetWebUiState();
     }
 
     /** Start the service, pair this WebView and load the web UI. */
     private void loadWebUi() {
-        final int generation = ++mLoadGeneration;
+        final int generation = mViewModel.nextLoadGeneration();
 
-        mWebUiStarted = true;
-        mPageError = false;
+        mViewModel.setWebUiStarted(true);
+        mViewModel.setPageError(false);
         if (mWebView != null) mWebView.stopLoading();
         showStatus(getString(R.string.opencode_web_starting), false);
 
@@ -666,7 +724,7 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
                     if (isFinishing() || isDestroyed()) return;
                     // A newer load was started (reload button, stop detected, ...) while this one was
                     // waiting for the service. Do not let the stale result win.
-                    if (generation != mLoadGeneration) return;
+                    if (generation != mViewModel.getLoadGeneration()) return;
                     if (mWebView == null) return;
 
                     if (url != null) {
@@ -677,7 +735,7 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
                         headers.put("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8");
                         mWebView.loadUrl(url, headers);
                     } else {
-                        mWebUiStarted = false;
+                        mViewModel.setWebUiStarted(false);
                         showError(message);
                     }
                 }
@@ -699,8 +757,8 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
 
     private void showError(@Nullable String details) {
         if (isFinishing() || isDestroyed()) return;
-        mPageError = true;
-        mWebUiStarted = false;
+        mViewModel.setPageError(true);
+        mViewModel.setWebUiStarted(false);
 
         String message = getString(R.string.opencode_web_failed);
         if (details != null && !details.trim().isEmpty()) {
@@ -1315,7 +1373,8 @@ public final class OpenCodeWebActivity extends AppCompatActivity {
     /** @return the origin of the OpenCode web UI, or {@code null} when it is not ready. */
     @Nullable
     private String webUiOrigin() {
-        if (mWebView == null || mPageError || !mAuthCompleted) return null;
+        if (mWebView == null || mViewModel.isPageError() || !mViewModel.isAuthCompleted())
+            return null;
 
         String url = mWebView.getUrl();
         if (url == null || url.contains("/auth/connect/")) return null;

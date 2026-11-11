@@ -25,7 +25,7 @@
             android:contentDescription="@string/opencode_files_close"
             android:padding="10dp"
             android:src="@drawable/ic_close"
-            app:tint="@color/github_muted" />
+            app:tint="?attr/colorOnSurfaceVariant" />
 
         <LinearLayout
             android:layout_width="0dp"
@@ -49,7 +49,7 @@
                 android:layout_height="wrap_content"
                 android:ellipsize="middle"
                 android:maxLines="1"
-                android:textColor="@color/github_muted"
+                android:textColor="?attr/colorOnSurfaceVariant"
                 android:textSize="12sp" />
         </LinearLayout>
 
@@ -61,7 +61,7 @@
             android:contentDescription="@string/opencode_files_viewer_search"
             android:padding="10dp"
             android:src="@drawable/ic_search"
-            app:tint="@color/github_muted" />
+            app:tint="?attr/colorOnSurfaceVariant" />
 
         <ImageButton
             android:id="@+id/code_viewer_save"
@@ -72,7 +72,7 @@
             android:padding="10dp"
             android:src="@drawable/ic_save"
             android:visibility="gone"
-            app:tint="@color/github_accent" />
+            app:tint="?attr/colorPrimary" />
 
         <ImageButton
             android:id="@+id/code_viewer_more"
@@ -82,7 +82,7 @@
             android:contentDescription="@string/opencode_files_more"
             android:padding="10dp"
             android:src="@drawable/ic_more"
-            app:tint="@color/github_muted" />
+            app:tint="?attr/colorOnSurfaceVariant" />
     </LinearLayout>
 
     <FrameLayout
@@ -114,7 +114,7 @@
             android:layout_gravity="center"
             android:gravity="center"
             android:padding="16dp"
-            android:textColor="@color/github_muted"
+            android:textColor="?attr/colorOnSurfaceVariant"
             android:textSize="13sp"
             android:visibility="gone" />
     </FrameLayout>
@@ -137,7 +137,7 @@
             android:paddingEnd="8dp"
             android:paddingBottom="4dp"
             android:singleLine="true"
-            android:textColor="@color/github_muted"
+            android:textColor="?attr/colorOnSurfaceVariant"
             android:textSize="11sp" />
 
         <ProgressBar

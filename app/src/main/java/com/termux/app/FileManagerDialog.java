@@ -47,6 +47,7 @@ import androidx.appcompat.app.AlertDialog;
 import androidx.core.content.ContextCompat;
 import androidx.core.content.FileProvider;
 
+import com.google.android.material.color.MaterialColors;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.termux.BuildConfig;
 import com.termux.R;
@@ -477,7 +478,8 @@ final class FileManagerDialog {
         LinearLayout.LayoutParams iconParams = new LinearLayout.LayoutParams(dp(24), dp(24));
         icon.setLayoutParams(iconParams);
         icon.setImageResource(iconRes);
-        icon.setColorFilter(activity.getResources().getColor(R.color.github_muted));
+        icon.setColorFilter(MaterialColors.getColor(activity, R.attr.opencodeColorMuted,
+            ContextCompat.getColor(activity, R.color.github_muted)));
         row.addView(icon);
 
         LinearLayout textColumn = new LinearLayout(activity);
@@ -496,7 +498,8 @@ final class FileManagerDialog {
             TextView subtitleView = new TextView(activity);
             subtitleView.setText(subtitle);
             subtitleView.setTextSize(11f);
-            subtitleView.setTextColor(activity.getResources().getColor(R.color.github_muted));
+            subtitleView.setTextColor(MaterialColors.getColor(activity, R.attr.opencodeColorMuted,
+                ContextCompat.getColor(activity, R.color.github_muted)));
             subtitleView.setMaxLines(1);
             subtitleView.setEllipsize(android.text.TextUtils.TruncateAt.MIDDLE);
             textColumn.addView(subtitleView);
@@ -607,8 +610,10 @@ final class FileManagerDialog {
             }
         }
 
-        int accent = ContextCompat.getColor(activity, R.color.github_accent);
-        int muted = ContextCompat.getColor(activity, R.color.github_muted);
+        int accent = MaterialColors.getColor(activity, R.attr.opencodeColorAccent,
+            ContextCompat.getColor(activity, R.color.github_accent));
+        int muted = MaterialColors.getColor(activity, R.attr.opencodeColorMuted,
+            ContextCompat.getColor(activity, R.color.github_muted));
         for (int i = 0; i < labels.size(); i++) {
             final File target = targets.get(i);
             TextView segment = new TextView(activity);

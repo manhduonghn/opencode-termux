@@ -30,7 +30,7 @@
                 android:contentDescription="@string/opencode_files_locations"
                 android:padding="10dp"
                 android:src="@drawable/ic_menu"
-                app:tint="@color/github_muted" />
+                app:tint="?attr/colorOnSurfaceVariant" />
 
             <TextView
                 android:id="@+id/managed_file_title"
@@ -52,7 +52,7 @@
                 android:contentDescription="@string/opencode_files_view_mode"
                 android:padding="10dp"
                 android:src="@drawable/ic_grid"
-                app:tint="@color/github_muted" />
+                app:tint="?attr/colorOnSurfaceVariant" />
 
             <ImageButton
                 android:id="@+id/managed_file_more"
@@ -62,7 +62,7 @@
                 android:contentDescription="@string/opencode_files_more"
                 android:padding="10dp"
                 android:src="@drawable/ic_more"
-                app:tint="@color/github_muted" />
+                app:tint="?attr/colorOnSurfaceVariant" />
 
             <ImageButton
                 android:id="@+id/managed_file_close"
@@ -72,7 +72,7 @@
                 android:contentDescription="@string/opencode_files_close"
                 android:padding="10dp"
                 android:src="@drawable/ic_close"
-                app:tint="@color/github_muted" />
+                app:tint="?attr/colorOnSurfaceVariant" />
         </LinearLayout>
 
         <!-- Path / navigation toolbar -->
@@ -90,7 +90,7 @@
                 android:contentDescription="@string/opencode_files_up"
                 android:padding="9dp"
                 android:src="@drawable/ic_arrow_up"
-                app:tint="@color/github_muted" />
+                app:tint="?attr/colorOnSurfaceVariant" />
 
             <ImageButton
                 android:id="@+id/managed_file_home"
@@ -100,7 +100,7 @@
                 android:contentDescription="@string/opencode_files_home"
                 android:padding="9dp"
                 android:src="@drawable/ic_home"
-                app:tint="@color/github_muted" />
+                app:tint="?attr/colorOnSurfaceVariant" />
 
             <TextView
                 android:id="@+id/managed_file_path"
@@ -115,7 +115,7 @@
                 android:paddingEnd="4dp"
                 android:paddingBottom="8dp"
                 android:singleLine="true"
-                android:textColor="@color/github_muted"
+                android:textColor="?attr/colorOnSurfaceVariant"
                 android:textSize="12sp"
                 android:textStyle="bold" />
         </LinearLayout>
@@ -156,7 +156,7 @@
                 android:paddingTop="4dp"
                 android:paddingEnd="4dp"
                 android:paddingBottom="4dp"
-                android:textColor="@color/github_accent"
+                android:textColor="?attr/colorPrimary"
                 android:textSize="13sp"
                 android:textStyle="bold" />
 
@@ -168,7 +168,7 @@
                 android:contentDescription="@string/opencode_files_select_all"
                 android:padding="9dp"
                 android:src="@drawable/ic_select_all"
-                app:tint="@color/github_muted" />
+                app:tint="?attr/colorOnSurfaceVariant" />
 
             <ImageButton
                 android:id="@+id/managed_file_selection_share"
@@ -178,7 +178,7 @@
                 android:contentDescription="@string/opencode_files_share"
                 android:padding="10dp"
                 android:src="@drawable/ic_share"
-                app:tint="@color/github_muted" />
+                app:tint="?attr/colorOnSurfaceVariant" />
 
             <ImageButton
                 android:id="@+id/managed_file_selection_delete"
@@ -188,7 +188,7 @@
                 android:contentDescription="@string/opencode_files_delete"
                 android:padding="10dp"
                 android:src="@drawable/ic_delete"
-                app:tint="@color/github_muted" />
+                app:tint="?attr/colorOnSurfaceVariant" />
 
             <ImageButton
                 android:id="@+id/managed_file_selection_more"
@@ -198,7 +198,7 @@
                 android:contentDescription="@string/opencode_files_more"
                 android:padding="10dp"
                 android:src="@drawable/ic_more"
-                app:tint="@color/github_muted" />
+                app:tint="?attr/colorOnSurfaceVariant" />
 
             <ImageButton
                 android:id="@+id/managed_file_selection_close"
@@ -208,7 +208,7 @@
                 android:contentDescription="@string/opencode_files_close"
                 android:padding="10dp"
                 android:src="@drawable/ic_close"
-                app:tint="@color/github_muted" />
+                app:tint="?attr/colorOnSurfaceVariant" />
         </LinearLayout>
 
         <!-- Summary / progress -->
@@ -225,7 +225,7 @@
                 android:layout_weight="1"
                 android:lineSpacingExtra="2dp"
                 android:paddingStart="4dp"
-                android:textColor="@color/github_muted"
+                android:textColor="?attr/colorOnSurfaceVariant"
                 android:textSize="12sp" />
 
             <ProgressBar
@@ -244,7 +244,7 @@
                 android:contentDescription="@string/opencode_files_refresh"
                 android:padding="8dp"
                 android:src="@drawable/ic_refresh"
-                app:tint="@color/github_muted" />
+                app:tint="?attr/colorOnSurfaceVariant" />
         </LinearLayout>
 
         <FrameLayout
@@ -280,7 +280,7 @@
                 android:gravity="center"
                 android:padding="16dp"
                 android:text="@string/opencode_files_empty"
-                android:textColor="@color/github_muted"
+                android:textColor="?attr/colorOnSurfaceVariant"
                 android:textSize="13sp"
                 android:visibility="gone" />
         </FrameLayout>
@@ -293,7 +293,7 @@
             android:paddingStart="4dp"
             android:paddingEnd="4dp"
             android:text="@string/opencode_files_hint"
-            android:textColor="@color/github_muted"
+            android:textColor="?attr/colorOnSurfaceVariant"
             android:textSize="11sp" />
     </LinearLayout>
 
@@ -305,8 +305,8 @@
         android:layout_margin="20dp"
         android:contentDescription="@string/opencode_files_new"
         android:src="@drawable/ic_add"
-        app:backgroundTint="@color/github_accent"
-        app:tint="@color/white" />
+        app:backgroundTint="?attr/colorPrimary"
+        app:tint="?attr/colorOnPrimary" />
 
     <View
         android:id="@+id/managed_file_drawer_scrim"
@@ -336,7 +336,7 @@
             android:paddingEnd="20dp"
             android:paddingBottom="8dp"
             android:text="@string/opencode_files_locations_title"
-            android:textColor="@color/github_muted"
+            android:textColor="?attr/colorOnSurfaceVariant"
             android:textSize="12sp"
             android:textStyle="bold" />
 

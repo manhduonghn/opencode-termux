@@ -29,7 +29,7 @@
                 android:contentDescription="@string/opencode_files_close"
                 android:padding="10dp"
                 android:src="@drawable/ic_close"
-                app:tint="@color/github_muted" />
+                app:tint="?attr/colorOnSurfaceVariant" />
 
             <LinearLayout
                 android:layout_width="0dp"
@@ -55,7 +55,7 @@
                     android:ellipsize="end"
                     android:maxLines="1"
                     android:text="@string/opencode_github_not_logged_in"
-                    android:textColor="@color/github_muted"
+                    android:textColor="?attr/colorOnSurfaceVariant"
                     android:textSize="12sp" />
             </LinearLayout>
 
@@ -67,7 +67,7 @@
                 android:contentDescription="@string/opencode_files_refresh"
                 android:padding="8dp"
                 android:src="@drawable/ic_refresh"
-                app:tint="@color/github_muted" />
+                app:tint="?attr/colorOnSurfaceVariant" />
 
             <ImageButton
                 android:id="@+id/opencode_github_more"
@@ -77,7 +77,7 @@
                 android:contentDescription="@string/opencode_files_more"
                 android:padding="10dp"
                 android:src="@drawable/ic_more"
-                app:tint="@color/github_muted" />
+                app:tint="?attr/colorOnSurfaceVariant" />
         </LinearLayout>
 
         <!-- Connection state, one line, like the file manager summary -->
@@ -115,7 +115,7 @@
                 android:paddingEnd="10dp"
                 android:paddingBottom="4dp"
                 android:text="@string/opencode_github_checking"
-                android:textColor="@color/github_muted"
+                android:textColor="?attr/colorOnSurfaceVariant"
                 android:textSize="11sp"
                 android:textStyle="bold" />
         </LinearLayout>
@@ -156,20 +156,20 @@
                         android:layout_height="wrap_content"
                         android:layout_marginTop="2dp"
                         android:text="@string/opencode_github_install_desc"
-                        android:textColor="@color/github_muted"
+                        android:textColor="?attr/colorOnSurfaceVariant"
                         android:textSize="12sp" />
 
                     <Button
                         android:id="@+id/opencode_github_install_button"
-                        style="@style/Widget.MaterialComponents.Button"
+                        style="@style/Widget.Material3.Button"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="12dp"
-                        android:backgroundTint="@color/github_accent"
+                        android:backgroundTint="?attr/colorPrimary"
                         android:minHeight="46dp"
                         android:text="@string/opencode_github_install_action"
                         android:textAllCaps="false"
-                        android:textColor="@color/white" />
+                        android:textColor="?attr/colorOnPrimary" />
 
                     <TextView
                         android:id="@+id/opencode_github_install_status"
@@ -179,7 +179,7 @@
                         android:ellipsize="end"
                         android:fontFamily="monospace"
                         android:maxLines="4"
-                        android:textColor="@color/github_muted"
+                        android:textColor="?attr/colorOnSurfaceVariant"
                         android:textSize="11sp"
                         android:textIsSelectable="true"
                         android:visibility="gone" />
@@ -203,23 +203,23 @@
 
                     <Button
                         android:id="@+id/opencode_github_login_button"
-                        style="@style/Widget.MaterialComponents.Button"
+                        style="@style/Widget.Material3.Button"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginStart="8dp"
-                        android:backgroundTint="@color/github_accent"
+                        android:backgroundTint="?attr/colorPrimary"
                         android:minHeight="42dp"
                         android:minWidth="0dp"
                         android:paddingStart="18dp"
                         android:paddingEnd="18dp"
                         android:text="@string/opencode_settings_github_connect"
                         android:textAllCaps="false"
-                        android:textColor="@color/white"
+                        android:textColor="?attr/colorOnPrimary"
                         android:visibility="gone" />
 
                     <Button
                         android:id="@+id/opencode_github_logout_button"
-                        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                        style="@style/Widget.Material3.Button.OutlinedButton"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginStart="8dp"
@@ -229,9 +229,9 @@
                         android:paddingEnd="18dp"
                         android:text="@string/opencode_settings_github_disconnect"
                         android:textAllCaps="false"
-                        android:textColor="@color/github_muted"
+                        android:textColor="?attr/colorOnSurfaceVariant"
                         android:visibility="gone"
-                        app:strokeColor="@color/github_surface_stroke" />
+                        app:strokeColor="?attr/colorOutlineVariant" />
                 </LinearLayout>
 
                 <!-- Device flow: code, link and hint -->
@@ -253,16 +253,16 @@
 
                 <Button
                     android:id="@+id/opencode_github_copy_button"
-                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                    style="@style/Widget.Material3.Button.OutlinedButton"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="8dp"
                     android:minHeight="46dp"
                     android:text="@string/opencode_settings_github_copy"
                     android:textAllCaps="false"
-                    android:textColor="@color/github_accent"
+                    android:textColor="?attr/colorPrimary"
                     android:visibility="gone"
-                    app:strokeColor="@color/github_surface_stroke" />
+                    app:strokeColor="?attr/colorOutlineVariant" />
 
                 <TextView
                     android:id="@+id/opencode_github_link"
@@ -270,7 +270,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="10dp"
                     android:autoLink="web"
-                    android:textColor="@color/github_accent"
+                    android:textColor="?attr/colorPrimary"
                     android:textIsSelectable="true"
                     android:textSize="13sp"
                     android:visibility="gone" />
@@ -281,7 +281,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="8dp"
                     android:lineSpacingExtra="2dp"
-                    android:textColor="@color/github_muted"
+                    android:textColor="?attr/colorOnSurfaceVariant"
                     android:textSize="12sp"
                     android:visibility="gone" />
 
@@ -297,7 +297,7 @@
                         android:layout_width="match_parent"
                         android:layout_height="1dp"
                         android:layout_marginTop="18dp"
-                        android:background="@color/github_surface_stroke" />
+                        android:background="?attr/colorOutlineVariant" />
 
                     <LinearLayout
                         android:layout_width="match_parent"
@@ -312,7 +312,7 @@
                             android:layout_weight="1"
                             android:letterSpacing="0.08"
                             android:text="@string/opencode_github_repos_title"
-                            android:textColor="@color/github_muted"
+                            android:textColor="?attr/colorOnSurfaceVariant"
                             android:textSize="11sp"
                             android:textStyle="bold" />
 
@@ -324,7 +324,7 @@
                             android:contentDescription="@string/opencode_files_refresh"
                             android:padding="8dp"
                             android:src="@drawable/ic_refresh"
-                            app:tint="@color/github_muted" />
+                            app:tint="?attr/colorOnSurfaceVariant" />
                     </LinearLayout>
 
                     <TextView
@@ -333,7 +333,7 @@
                         android:layout_height="wrap_content"
                         android:layout_marginTop="2dp"
                         android:lineSpacingExtra="2dp"
-                        android:textColor="@color/github_muted"
+                        android:textColor="?attr/colorOnSurfaceVariant"
                         android:textSize="12sp" />
 
                     <LinearLayout
@@ -350,7 +350,7 @@
                     android:layout_marginTop="24dp"
                     android:gravity="center"
                     android:lineSpacingExtra="2dp"
-                    android:textColor="@color/github_muted"
+                    android:textColor="?attr/colorOnSurfaceVariant"
                     android:textSize="13sp"
                     android:visibility="gone" />
             </LinearLayout>
@@ -366,6 +366,6 @@
         android:contentDescription="@string/opencode_github_clone_manual"
         android:src="@drawable/ic_download"
         android:visibility="gone"
-        app:backgroundTint="@color/github_accent"
-        app:tint="@color/white" />
+        app:backgroundTint="?attr/colorPrimary"
+        app:tint="?attr/colorOnPrimary" />
 </FrameLayout>

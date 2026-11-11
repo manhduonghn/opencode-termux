@@ -1,7 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!--
-     https://material.io/develop/android/theming/dark
+     Material You theming.
+
+     The app uses the Material 3 themes. On Android 12+ DynamicColors replaces the color roles
+     below with the colors derived from the user wallpaper (see TermuxApplication.onCreate). On
+     older versions the app falls back to its own blue palette so the look does not change.
     -->
 
     <!-- TermuxApp Light DarkActionBar theme. -->
@@ -11,25 +15,44 @@
 
     <!-- TermuxApp DayNight DarkActionBar theme. -->
     <style name="Theme.TermuxApp.DayNight.DarkActionBar" parent="Theme.BaseActivity.DayNight.DarkActionBar">
+        <!-- Primary brand color. -->
         <item name="colorPrimary">@color/app_accent</item>
         <item name="colorPrimaryVariant">@color/app_accent</item>
         <item name="colorOnPrimary">@color/app_surface</item>
         <item name="colorSecondary">@color/app_accent</item>
         <item name="colorSecondaryVariant">@color/app_accent</item>
         <item name="colorOnSecondary">@color/app_surface</item>
+
+        <!--
+         Material 3 color roles. They keep the current blue look on devices without dynamic
+         colors and are replaced by the wallpaper palette on Android 12+.
+        -->
+        <item name="colorSurface">@color/app_surface</item>
+        <item name="colorOnSurface">@color/app_text</item>
+        <item name="colorSurfaceVariant">@color/app_surface_alt</item>
+        <item name="colorOnSurfaceVariant">@color/app_muted</item>
+        <item name="colorPrimaryContainer">@color/app_accent_soft</item>
+        <item name="colorOnPrimaryContainer">@color/app_accent</item>
+        <item name="colorOutline">@color/app_stroke</item>
+        <item name="colorOutlineVariant">@color/app_stroke</item>
+        <item name="colorError">@color/app_danger</item>
+        <item name="colorOnError">@color/app_surface</item>
+
+        <!-- Color roles read from Java code (see attrs.xml). -->
+        <item name="opencodeColorAccent">?attr/colorPrimary</item>
+        <item name="opencodeColorMuted">?attr/colorOnSurfaceVariant</item>
+        <item name="opencodeColorChipOk">?attr/colorPrimaryContainer</item>
+        <item name="opencodeColorChipOff">?attr/colorSurfaceVariant</item>
     </style>
     <!-- TermuxApp DayNight NoActionBar theme. -->
-    <style name="Theme.TermuxApp.DayNight.NoActionBar" parent="Theme.BaseActivity.DayNight.NoActionBar">
-        <item name="colorPrimary">@color/app_accent</item>
-        <item name="colorPrimaryVariant">@color/app_accent</item>
-        <item name="colorOnPrimary">@color/app_surface</item>
-        <item name="colorSecondary">@color/app_accent</item>
-        <item name="colorSecondaryVariant">@color/app_accent</item>
-        <item name="colorOnSecondary">@color/app_surface</item>
+    <style name="Theme.TermuxApp.DayNight.NoActionBar" parent="Theme.TermuxApp.DayNight.DarkActionBar">
+        <item name="windowActionBar">false</item>
+        <item name="windowNoTitle">true</item>
     </style>
+
     <!-- Full screen surface used by the unified file manager, so it behaves like an app screen
          instead of a floating dialog. -->
-    <style name="Theme.Opencode.FullScreenDialog" parent="Theme.MaterialComponents.DayNight.Dialog">
+    <style name="Theme.Opencode.FullScreenDialog" parent="Theme.Material3.DayNight.Dialog">
         <item name="windowNoTitle">true</item>
         <item name="windowActionBar">false</item>
         <item name="android:windowNoTitle">true</item>

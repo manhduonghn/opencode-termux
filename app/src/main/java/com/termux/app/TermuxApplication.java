@@ -17,12 +17,18 @@ import com.termux.shared.termux.shell.am.TermuxAmSocketServer;
 import com.termux.shared.termux.shell.TermuxShellManager;
 import com.termux.shared.termux.theme.TermuxThemeUtils;
 
+import com.google.android.material.color.DynamicColors;
+
 public class TermuxApplication extends Application {
 
     private static final String LOG_TAG = "TermuxApplication";
 
     public void onCreate() {
         super.onCreate();
+
+        // Enable Material You dynamic colors on Android 12+ so the app UI follows the wallpaper
+        // palette. On older versions the app keeps its own blue palette.
+        DynamicColors.applyToActivitiesIfAvailable(this);
 
         Context context = getApplicationContext();
 

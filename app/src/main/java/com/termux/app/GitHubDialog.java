@@ -29,6 +29,7 @@ import android.widget.Toast;
 
 import androidx.core.content.ContextCompat;
 
+import com.google.android.material.color.MaterialColors;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.termux.R;
@@ -307,11 +308,15 @@ final class GitHubDialog {
     private void setChip(int textRes, boolean connected) {
         if (chipView == null) return;
         chipView.setText(textRes);
-        ColorStateList background = ColorStateList.valueOf(ContextCompat.getColor(activity,
-            connected ? R.color.github_chip_ok_bg : R.color.github_chip_off_bg));
-        chipView.setBackgroundTintList(background);
-        chipView.setTextColor(ContextCompat.getColor(activity,
-            connected ? R.color.github_accent : R.color.github_muted));
+        int background = MaterialColors.getColor(activity,
+            connected ? R.attr.opencodeColorChipOk : R.attr.opencodeColorChipOff,
+            ContextCompat.getColor(activity,
+                connected ? R.color.github_chip_ok_bg : R.color.github_chip_off_bg));
+        chipView.setBackgroundTintList(ColorStateList.valueOf(background));
+        chipView.setTextColor(MaterialColors.getColor(activity,
+            connected ? R.attr.opencodeColorAccent : R.attr.opencodeColorMuted,
+            ContextCompat.getColor(activity,
+                connected ? R.color.github_accent : R.color.github_muted)));
     }
 
     private void setBusy(boolean busy) {
@@ -586,8 +591,10 @@ final class GitHubDialog {
             if (visibilityView != null) {
                 visibilityView.setText(isPrivate
                     ? R.string.opencode_github_private : R.string.opencode_github_public);
-                visibilityView.setTextColor(ContextCompat.getColor(activity,
-                    isPrivate ? R.color.github_accent : R.color.github_muted));
+                visibilityView.setTextColor(MaterialColors.getColor(activity,
+                    isPrivate ? R.attr.opencodeColorAccent : R.attr.opencodeColorMuted,
+                    ContextCompat.getColor(activity,
+                        isPrivate ? R.color.github_accent : R.color.github_muted)));
             }
             if (descriptionView != null) {
                 if (description == null || description.trim().isEmpty()

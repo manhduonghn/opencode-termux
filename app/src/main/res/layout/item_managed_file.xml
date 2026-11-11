@@ -19,7 +19,7 @@
         android:layout_marginStart="8dp"
         android:contentDescription="@null"
         android:src="@drawable/ic_folder"
-        app:tint="@color/github_muted" />
+        app:tint="?attr/colorOnSurfaceVariant" />
 
     <LinearLayout
         android:layout_width="0dp"
@@ -43,7 +43,7 @@
             android:layout_marginTop="2dp"
             android:ellipsize="end"
             android:singleLine="true"
-            android:textColor="@color/github_muted"
+            android:textColor="?attr/colorOnSurfaceVariant"
             android:textSize="11sp" />
     </LinearLayout>
 
@@ -64,5 +64,5 @@
         android:focusable="false"
         android:padding="10dp"
         android:src="@drawable/ic_more"
-        app:tint="@color/github_muted" />
+        app:tint="?attr/colorOnSurfaceVariant" />
 </LinearLayout>

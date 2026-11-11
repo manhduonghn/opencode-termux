@@ -23,7 +23,7 @@
             android:contentDescription="@string/opencode_picker_up"
             android:padding="8dp"
             android:src="@drawable/ic_arrow_up"
-            app:tint="@color/github_muted" />
+            app:tint="?attr/colorOnSurfaceVariant" />
 
         <EditText
             android:id="@+id/directory_picker_path"
@@ -39,7 +39,7 @@
 
         <Button
             android:id="@+id/directory_picker_go"
-            style="@style/Widget.MaterialComponents.Button.TextButton"
+            style="@style/Widget.Material3.Button.TextButton"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:minWidth="0dp"
@@ -82,7 +82,7 @@
             android:gravity="center"
             android:padding="16dp"
             android:text="@string/opencode_picker_empty"
-            android:textColor="@color/github_muted"
+            android:textColor="?attr/colorOnSurfaceVariant"
             android:textSize="13sp" />
     </FrameLayout>
 </LinearLayout>

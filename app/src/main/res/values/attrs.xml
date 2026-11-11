@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+     Theme attributes that expose the Material 3 color roles to the Java code. Each one resolves
+     to the matching dynamic color role on Android 12+ and to the app blue palette on older
+     versions. See Theme.TermuxApp.DayNight.DarkActionBar.
+    -->
+    <attr name="opencodeColorAccent" format="color" />
+    <attr name="opencodeColorMuted" format="color" />
+    <attr name="opencodeColorChipOk" format="color" />
+    <attr name="opencodeColorChipOff" format="color" />
+</resources>

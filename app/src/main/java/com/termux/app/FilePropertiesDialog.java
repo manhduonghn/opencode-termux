@@ -24,6 +24,7 @@ import android.widget.Toast;
 import androidx.appcompat.app.AlertDialog;
 import androidx.core.content.ContextCompat;
 
+import com.google.android.material.color.MaterialColors;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.termux.R;
 
@@ -211,7 +212,8 @@ final class FilePropertiesDialog {
         TextView labelView = new TextView(activity);
         labelView.setText(label);
         labelView.setTextSize(11);
-        labelView.setTextColor(ContextCompat.getColor(activity, R.color.github_muted));
+        labelView.setTextColor(MaterialColors.getColor(activity, R.attr.opencodeColorMuted,
+            ContextCompat.getColor(activity, R.color.github_muted)));
 
         TextView valueView = new TextView(activity);
         valueView.setText(value == null ? "" : value);

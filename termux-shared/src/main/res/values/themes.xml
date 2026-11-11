@@ -6,10 +6,12 @@
     -->
 
     <!--
-      BaseActivity Light DarkActionBar theme.
-      https://github.com/material-components/material-components-android/blob/1.4.0/lib/java/com/google/android/material/theme/res/values/themes.xml#L33
+      BaseActivity Light theme.
+      Material 3 has no DarkActionBar variants, so the default Material 3 theme is used and the
+      action bar follows the surface color.
+      https://github.com/material-components/material-components-android/blob/1.12.0/lib/java/com/google/android/material/theme/res/values/themes.xml
      -->
-    <style name="Theme.BaseActivity.Light.DarkActionBar" parent="Theme.MaterialComponents.Light.DarkActionBar">
+    <style name="Theme.BaseActivity.Light.DarkActionBar" parent="Theme.Material3.Light">
         <!-- Primary brand color. -->
         <item name="colorPrimary">@color/red_400</item>
         <item name="colorPrimaryVariant">@color/red_800</item>
@@ -69,9 +71,9 @@
 
     <!--
       BaseDialog Light theme.
-      https://github.com/material-components/material-components-android/blob/1.4.0/lib/java/com/google/android/material/dialog/res/values/themes.xml#L70
+      https://github.com/material-components/material-components-android/blob/1.12.0/lib/java/com/google/android/material/dialog/res/values/themes.xml
      -->
-    <style name="ThemeOverlay.BaseDialog.Light" parent="ThemeOverlay.MaterialComponents.MaterialAlertDialog">
+    <style name="ThemeOverlay.BaseDialog.Light" parent="ThemeOverlay.Material3.MaterialAlertDialog">
         <!-- Primary brand color. -->
         <item name="colorPrimary">@color/red_400</item>
         <item name="colorPrimaryVariant">@color/red_800</item>
