@@ -315,5 +315,4 @@ See [`docs/BUILDING.md`](docs/BUILDING.md) for the details (signing, ABI splits,
   bundled anymore.
 
 The installation technique is documented in
-[`docs/OPENCODE_INSTALL_TECHNIQUE.md`](docs/OPENCODE_INSTALL_TECHNIQUE.md) and in
-<https://github.com/manhduonghn/opencode-install-technique>.
+[`docs/OPENCODE_INSTALL_TECHNIQUE.md`](docs/OPENCODE_INSTALL_TECHNIQUE.md)
