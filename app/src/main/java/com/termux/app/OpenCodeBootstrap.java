@@ -50,12 +50,16 @@ import java.util.regex.Pattern;
  * ships <b>bionic</b>. The binary therefore has to be patched before it can be executed:</p>
  *
  * <pre>
- *   apt-get install glibc-repo glibc-runner patchelf tar
+ *   apt-get install glibc-repo glibc-runner tar
  *     -&gt; download the official npm tarball @opencode/cli-linux-&lt;arch&gt;
  *     -&gt; tar -xzf package/bin/opencode
- *     -&gt; patchelf --set-interpreter $PREFIX/glibc/lib/ld-linux-*.so.*   (interpreter ONLY)
+ *     -&gt; point PT_INTERP at $PREFIX/glibc/lib/ld-linux-*.so.*   (interpreter ONLY)
  *     -&gt; verify with --version -&gt; atomic rename -&gt; $PREFIX/bin/opencode launcher
  * </pre>
+ *
+ * <p>The interpreter is rewritten by the native patcher that ships inside the app
+ * ({@link ElfPatch}, {@code libocpatch}). It only touches the PT_INTERP program header, so the
+ * external {@code patchelf} tool and its fragile libc++ dependency are not needed anymore.</p>
  *
  * <p>Everything is done from this single class so that the installation keeps its progress,
  * survives the app being killed mid download and is able to repair itself afterwards. No root, no
@@ -136,6 +140,8 @@ public final class OpenCodeBootstrap {
     public static final String OPENCODE_BIN_PATH = PREFIX + "/bin/opencode";
     /** Launcher script, {@code oc-install}. */
     public static final String OC_INSTALL_PATH = PREFIX + "/bin/oc-install";
+    /** Native ELF patcher used by the launcher to repair the binary, {@code oc-patch}. */
+    public static final String OC_PATCH_PATH = PREFIX + "/bin/oc-patch";
     /** Installer script of older versions, removed on sight. */
     public static final String LEGACY_SETUP_SCRIPT_PATH = OC_HOME + "/setup.sh";
     /** Directory holding the second stage script of the Termux bootstrap. */
@@ -156,7 +162,7 @@ public final class OpenCodeBootstrap {
      * ========================================================================================== */
 
     /** Bumped whenever the launcher scripts change so that they get rewritten. */
-    private static final int LAUNCHER_VERSION = 4;
+    private static final int LAUNCHER_VERSION = 5;
 
     private static final String LAUNCHER_MARKER = "Managed by the OpenCode for Termux app. opencode-launcher-version: " + LAUNCHER_VERSION;
 
@@ -168,7 +174,6 @@ public final class OpenCodeBootstrap {
     private static final long APT_INSTALL_TIMEOUT_MS = 900_000L;
     private static final long SECOND_STAGE_TIMEOUT_MS = 240_000L;
     private static final long VERIFY_TIMEOUT_MS = 90_000L;
-    private static final long PATCH_TIMEOUT_MS = 300_000L;
     private static final long EXTRACT_TIMEOUT_MS = 180_000L;
     private static final long PROCESS_POLL_INTERVAL_MS = 100L;
 
@@ -443,9 +448,6 @@ public final class OpenCodeBootstrap {
         if (findGlibcLoader() == null)
             problems.add("the glibc loader (" + GLIBC_LIB_DIR + "/ld-linux-*.so.*)");
 
-        if (!isExecutable(new File(PREFIX + "/bin/patchelf")))
-            problems.add("the patchelf tool (" + PREFIX + "/bin/patchelf)");
-
         if (!isExecutable(new File(PREFIX + "/bin/tar")))
             problems.add("the tar tool (" + PREFIX + "/bin/tar)");
 
@@ -584,20 +586,14 @@ public final class OpenCodeBootstrap {
             // 'termux-am' is needed by the 'oc-install' launcher, it asks the app to install
             // or update the runtime.
             setStage(OpenCodeInstallState.STAGE_APT_INSTALL, "Installing the helper packages...");
-            if (!aptInstall(Arrays.asList("glibc-runner", "patchelf", "tar", "termux-am", "ripgrep")))
+            if (!aptInstall(Arrays.asList("glibc-runner", "tar", "termux-am", "ripgrep")))
                 Logger.logWarn(LOG_TAG, "Some of the helper packages could not be installed, continuing anyway.");
 
-            // 'patchelf' links against libc++_shared.so, an old libc++ makes it die with
-            // "cannot locate symbol __hash_memory". Verify it before downloading ~100 MB.
-            if (!patchelfWorks()) {
-                setStage(OpenCodeInstallState.STAGE_APT_INSTALL, "Repairing the patchelf tool...");
-                aptInstall(Arrays.asList("patchelf", "libc++"));
-                if (!patchelfWorks()) {
-                    aptReinstall(Arrays.asList("patchelf", "libc++"));
-                    if (!patchelfWorks())
-                        throw new InstallException("The 'patchelf' tool cannot run on this device: " + tail(lastOutput, 400));
-                }
-            }
+            // The ELF patcher ships inside the APK, it does not need any apt package. Publish
+            // the command line twin as $PREFIX/bin/oc-patch for the launcher.
+            installOcPatch();
+            if (!ElfPatch.isAvailable())
+                throw new InstallException("The native ELF patcher could not be loaded. Reinstall the app.");
 
             String loader = findGlibcLoader();
             if (loader == null)
@@ -643,6 +639,7 @@ public final class OpenCodeBootstrap {
             deleteQuietly(new File(LEGACY_SETUP_SCRIPT_PATH));
             restoreLauncher(new File(OPENCODE_BIN_PATH), buildOpenCodeLauncher());
             restoreLauncher(new File(OC_INSTALL_PATH), buildOcInstallLauncher());
+            installOcPatch();
             repairInterpreterIfNeeded(context);
             installRipgrep();
             String loader = findGlibcLoader();
@@ -720,15 +717,6 @@ public final class OpenCodeBootstrap {
             status("Repairing the package database...");
             run(Arrays.asList(PREFIX + "/bin/dpkg", "--configure", "-a"), APT_INSTALL_TIMEOUT_MS, true, null);
             apt(Arrays.asList("-f", "install", "-y"), APT_INSTALL_TIMEOUT_MS, true, null);
-            return apt(args, APT_INSTALL_TIMEOUT_MS, true, null);
-        }
-
-        private boolean aptReinstall(List<String> packages) {
-            List<String> args = new ArrayList<>();
-            args.add("install");
-            args.add("--reinstall");
-            args.add("-y");
-            args.addAll(packages);
             return apt(args, APT_INSTALL_TIMEOUT_MS, true, null);
         }
 
@@ -1203,11 +1191,6 @@ public final class OpenCodeBootstrap {
             setStage(OpenCodeInstallState.STAGE_PATCH, "Patching the OpenCode binary...");
             CmdResult patch = patchInterpreter(staged, loader);
             if (patch.exitCode != 0) {
-                status("The patch failed, reinstalling patchelf and retrying...");
-                aptReinstall(Arrays.asList("patchelf", "libc++"));
-                patch = patchInterpreter(staged, loader);
-            }
-            if (patch.exitCode != 0) {
                 deleteQuietly(staged);
                 throw new InstallException("Could not patch the OpenCode binary: " + tail(patch.output, 400));
             }
@@ -1250,9 +1233,61 @@ public final class OpenCodeBootstrap {
             return target;
         }
 
+        /**
+         * Point the interpreter (PT_INTERP) of an ELF binary at the glibc loader.
+         *
+         * <p>The native patcher of the app is used, no external tool is needed. It only rewrites
+         * the PT_INTERP program header, so unlike {@code patchelf} it does not have to rewrite
+         * the whole binary and it cannot fail because of a libc++ symbol.</p>
+         */
         private CmdResult patchInterpreter(File file, String loader) {
-            return run(Arrays.asList(PREFIX + "/bin/patchelf", "--set-interpreter", loader, file.getAbsolutePath()),
-                PATCH_TIMEOUT_MS, false, null);
+            if (!ElfPatch.isAvailable())
+                return new CmdResult(ElfPatch.EINVAL, "the native ELF patcher is not available", "patcher missing");
+            try {
+                int code = ElfPatch.setInterpreter(file.getAbsolutePath(), loader);
+                if (code != ElfPatch.OK)
+                    return new CmdResult(code, ElfPatch.describe(code), null);
+
+                // Read the header back so that a silent failure is caught right away.
+                String current = ElfPatch.getInterpreter(file.getAbsolutePath());
+                if (!loader.equals(current))
+                    return new CmdResult(ElfPatch.EIO, "the interpreter was not updated (now " + current + ")", null);
+
+                return new CmdResult(0, "", null);
+            } catch (Throwable t) {
+                Logger.logStackTraceWithMessage(LOG_TAG, "The native patcher failed for " + file, t);
+                return new CmdResult(-1, String.valueOf(t), t.getMessage());
+            }
+        }
+
+        /**
+         * Publish the command line twin of the native patcher as {@code $PREFIX/bin/oc-patch}.
+         *
+         * <p>The opencode launcher uses it to repair the binary when OpenCode replaced it with an
+         * unpatched build, without the app having to be started.</p>
+         */
+        private void installOcPatch() {
+            if (context == null) return;
+
+            File target = new File(OC_PATCH_PATH);
+            File source = new File(context.getApplicationInfo().nativeLibraryDir, "libocpatch-exec.so");
+            if (!source.isFile()) {
+                Logger.logWarn(LOG_TAG, "The command line patcher is missing from the APK (" + source + ").");
+                return;
+            }
+            // Copy when the target is missing, not executable or older than the copy in the APK
+            // (a same sized but newer source means the app was updated).
+            if (target.isFile() && target.canExecute()
+                && target.length() == source.length()
+                && target.lastModified() >= source.lastModified())
+                return;
+
+            if (!copyFile(source, target)) return;
+            try {
+                Os.chmod(target.getAbsolutePath(), 0755);
+            } catch (Exception e) {
+                Logger.logStackTraceWithMessage(LOG_TAG, "Could not make " + OC_PATCH_PATH + " executable", e);
+            }
         }
 
         /**
@@ -1440,10 +1475,6 @@ public final class OpenCodeBootstrap {
             return in.readUnsignedByte() | (in.readUnsignedByte() << 8);
         }
 
-        private boolean patchelfWorks() {
-            return run(Arrays.asList(PREFIX + "/bin/patchelf", "--version"), VERIFY_TIMEOUT_MS, false, null).exitCode == 0;
-        }
-
         private static boolean looksLikeAVersion(CmdResult result) {
             return result.exitCode == 0 && VERSION_OUTPUT_PATTERN.matcher(result.output == null ? "" : result.output).matches();
         }
@@ -1562,9 +1593,9 @@ public final class OpenCodeBootstrap {
             sb.append("if [ -z \"$MARK\" ] || [ \"$MARK\" != \"$NOW\" ]; then\n");
             sb.append("  # The binary changed after the last patch, patch a copy of it and only then replace it.\n");
             sb.append("  REAL=$(readlink -f \"$BIN\" 2>/dev/null || echo \"$BIN\"); TMP=\"$REAL.repair.$$\"\n");
-            sb.append("  if [ -x \"$P/bin/patchelf\" ] && \"$P/bin/patchelf\" --version >/dev/null 2>&1 \\\n");
+            sb.append("  if [ -x \"$P/bin/oc-patch\" ] \\\n");
             sb.append("     && cp \"$REAL\" \"$TMP\" 2>/dev/null \\\n");
-            sb.append("     && \"$P/bin/patchelf\" --set-interpreter \"$LOADER\" \"$TMP\" >/dev/null 2>&1 \\\n");
+            sb.append("     && \"$P/bin/oc-patch\" set-interpreter \"$LOADER\" \"$TMP\" >/dev/null 2>&1 \\\n");
             sb.append("     && chmod 755 \"$TMP\" 2>/dev/null \\\n");
             sb.append("     && \"$TMP\" --version >/dev/null 2>&1 \\\n");
             sb.append("     && mv \"$TMP\" \"$REAL\" 2>/dev/null; then\n");
@@ -1694,6 +1725,8 @@ public final class OpenCodeBootstrap {
             sb.append("installed version: ").append(getInstalledVersion()).append("\n");
             sb.append("second stage: ").append(new File(SECOND_STAGE_LOCK_PATH).exists() ? "done" : "not run").append("\n");
             sb.append("glibc loader: ").append(String.valueOf(findGlibcLoader())).append("\n");
+            sb.append("native patcher: ").append(ElfPatch.isAvailable() ? "loaded" : "missing").append("\n");
+            sb.append("oc-patch: ").append(new File(OC_PATCH_PATH).exists() ? "installed" : "missing").append("\n");
             sb.append("sources.list:\n").append(readTextFileQuietly(new File(APT_SOURCES_LIST_PATH))).append("\n");
             sb.append("sources.list.d:\n");
             File[] parts = new File(APT_SOURCEPARTS_DIR).listFiles();

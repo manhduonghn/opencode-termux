@@ -41,7 +41,7 @@ public final class OpenCodeInstallState {
     public static final String STAGE_PREPARE = "prepare";
     /** Refreshing the package lists of apt. */
     public static final String STAGE_APT_UPDATE = "apt_update";
-    /** Installing the helper packages (glibc-runner, patchelf, tar, …). */
+    /** Installing the helper packages (glibc-runner, tar, …). */
     public static final String STAGE_APT_INSTALL = "apt_install";
     /** Downloading the OpenCode package. */
     public static final String STAGE_DOWNLOAD = "download";

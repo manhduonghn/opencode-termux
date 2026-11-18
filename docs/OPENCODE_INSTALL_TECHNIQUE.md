@@ -1,8 +1,9 @@
 # Kỹ thuật cài đặt & khởi chạy OpenCode native trên Termux (viết bằng Java)
 
 > **Bản xuất kỹ thuật (technical export).** Tài liệu này mô tả *đúng* những gì code trong repo này
-> làm: tải các thư viện cần thiết (glibc runtime, `patchelf`, `tar`), tải bản OpenCode chính thức,
-> **vá** file ELF, rồi **khởi chạy** — tất cả bằng Java, không cần root, không proot, không chroot.
+> làm: tải các thư viện cần thiết (glibc runtime, `tar`), tải bản OpenCode chính thức,
+> **vá `PT_INTERP`** của file ELF bằng một patcher native viết bằng C (không còn phụ thuộc
+> `patchelf`), rồi **khởi chạy** — không cần root, không proot, không chroot.
 >
 > Mọi khẳng định kỹ thuật trong tài liệu đều truy được về mã nguồn; số dòng được ghi kèm để
 > tiện tra cứu. Tài liệu này bổ sung cho [`FORK_OPENCODE.md`](./FORK_OPENCODE.md) (phần mô tả
@@ -12,8 +13,9 @@
 
 ## 0. Tóm tắt (TL;DR)
 
-Toàn bộ pipeline nằm trong **một file Java duy nhất**:
-`app/src/main/java/com/termux/app/OpenCodeBootstrap.java` (1830 dòng). Không có script shell nào
+Toàn bộ pipeline được điều khiển bởi **một file Java duy nhất**:
+`app/src/main/java/com/termux/app/OpenCodeBootstrap.java`. Phần vá ELF được tách ra thành một thư
+viện native nhỏ (`app/src/main/cpp/elfpatch.c`, nạp qua `ElfPatch.java`). Không có script shell nào
 trong `assets/` — vì Termux nhúng `$PREFIX` vào binary của bootstrap, một script nằm sẵn trong
 APK sẽ bị ghi đè/không tương thích khi cài đặt; đặt logic vào Java giữ được tính "một nguồn
 sự thật" và cho phép app kiểm soát nhịp cài (tiến trình, notification, tiếp tục sau khi app bị
@@ -23,10 +25,10 @@ Pipeline 5 bước, mỗi bước là idempotent:
 
 ```
 0. Gate          : $PREFIX/bin/apt-get phải tồn tại (Termux bootstrap đã giải nén) + second-stage + resolv.conf
-1. Thư viện      : apt-get install glibc-repo → glibc-runner patchelf tar
+1. Thư viện      : apt-get install glibc-repo → glibc-runner tar
 2. Phiên bản     : GET https://opencode.ai/update/api/latest/cli/npm  (fallback: registry.npmjs.org)
 3. Tải + giải nén: GET registry.npmjs.org/@opencode/cli-linux-<arch>/-/<pkg>-<ver>.tgz  →  tar -xzf
-4. Vá ELF        : patchelf --set-interpreter $PREFIX/glibc/lib/ld-linux-*.so.*   (CHỈ interpreter, KHÔNG --set-rpath)
+4. Vá ELF        : patcher native trỏ PT_INTERP tới $PREFIX/glibc/lib/ld-linux-*.so.*  (CHỈ interpreter)
 5. Khởi chạy     : launcher $PREFIX/bin/opencode  (unset LD_PRELOAD, self-heal) + $PREFIX/bin/oc-install
 ```
 
@@ -43,27 +45,50 @@ Android (bionic làm kernel ABI, glibc làm userspace) — không cần root, kh
 | Android chỉ có **bionic** | `libc.so` của Android là bionic; loader của Termux là `/system/bin/linker64`. Một binary glibc sẽ báo `not found` / `Exec format error` khi chạy trực tiếp. |
 | Đường đi thay thế: **glibc-runner** | Repo chính thức `termux/glibc-packages` cung cấp loader `ld-linux-aarch64.so.1` + `libc.so.6` cho Termux trong `$PREFIX/glibc/lib`. |
 | Binary vẫn cần **interpreter glibc** | ELF của OpenCode có `PT_INTERP = /lib64/ld-linux-x86-64.so.2` (đường dẫn của desktop Linux, không tồn tại trên Android). |
-| ⇒ Cần **vá `PT_INTERP`** | `patchelf --set-interpreter <loader của Termux>` — thay *duy nhất* đường dẫn interpreter, giữ nguyên mọi thứ khác. |
+| ⇒ Cần **vá `PT_INTERP`** | Đổi *duy nhất* đường dẫn interpreter sang loader của Termux, giữ nguyên mọi thứ khác. Việc này do patcher native của app làm (xem §8). |
 
 Sau khi vá, kernel chỉ cần đọc `PT_INTERP` và nạp loader của Termux; loader nạp `libc.so.6`,
 `libpthread.so.0`… **từ chính thư mục của nó** (`$PREFIX/glibc/lib`) nên **không cần RPATH**.
 
-### 1.1. Lỗi kinh điển: đừng `--set-rpath`
+### 1.1. Patcher native viết bằng C (thay cho `patchelf`)
 
-`patchelf --set-rpath` trên binary ~90–200 MB này sẽ sửa lại `.dynamic`/program headers và để lại
-binary **crash `SIGSEGV`** ngay cả khi nó "thành công" (exit code 0). Triệu chứng: `opencode --version`
-in ra dòng rỗng, exit code **139**.
+Bản cũ dùng `patchelf --set-interpreter` (một gói apt riêng). Cách đó có ba nhược điểm:
 
-Vì vậy installer trong repo **chỉ vá interpreter**:
+1. **Phụ thuộc gói ngoài**: `patchelf` link với `libc++_shared.so`; nếu `libc++` trong `$PREFIX/lib`
+   cũ hơn bản `patchelf` được build thì lệnh chết với `cannot locate symbol __hash_memory`, và
+   **cả quá trình cài đặt thất bại**.
+2. **Chậm**: `patchelf` ghi lại toàn bộ file ~250 MB, có thể mất hàng phút.
+3. **Rủi ro hỏng file**: `patchelf --set-rpath` từng làm binary crash `SIGSEGV` (exit code **139**)
+   dù báo thành công.
 
-```java
-// OpenCodeBootstrap.java:760
-run(Arrays.asList(PREFIX + "/bin/patchelf", "--set-interpreter", loader, file.getAbsolutePath()), PATCH_TIMEOUT_MS)
+Bản hiện tại thay bằng `app/src/main/cpp/elfpatch.c`, được biên dịch vào APK (NDK) và nạp qua
+`ElfPatch.java` (JNI). Nó **chỉ sửa header chương trình `PT_INTERP`**:
+
+- Nếu đường dẫn mới **vừa** slot cũ (`strlen+1 <= p_filesz`) → ghi đè tại chỗ (vài byte, bất kể
+  binary lớn cỡ nào), và bảo đảm byte cuối slot là `\0` (kernel kiểm tra điều này).
+- Nếu **không vừa** → ghi chuỗi vào **cuối file** rồi trỏ lại `p_offset`/`p_filesz`/`p_memsz` của
+  `PT_INTERP` vào đó. Kernel đọc interpreter trực tiếp từ file nên nó **không cần nằm trong một
+  `PT_LOAD`** — đây là điểm mấu chốt khiến cách "append" hoạt động.
+
+```c
+/* elfpatch.c: elf_set_interpreter() */
+if (length <= ph.p_filesz) {
+    write_full(fd, interpreter, length, ph.p_offset);      /* ghi tại chỗ */
+    write_full(fd, &zero, 1, ph.p_offset + ph.p_filesz - 1); /* byte cuối = NUL */
+} else {
+    off_t offset = st.st_size;                              /* nối vào cuối file */
+    write_full(fd, interpreter, length, offset);
+    ph.p_offset = offset; ph.p_filesz = length; ph.p_memsz = length;
+    write_full(fd, &ph, sizeof(ph), ph_offset);
+}
 ```
 
 `RPATH` là thừa vì loader glibc của Termux tự tìm thư viện trong thư mục của nó.
 
-### 1.2. Lỗi kinh điển thứ hai: `LD_PRELOAD` của bionic
+> **Đã kiểm chứng thực tế**: chèn chuỗi interpreter dài hơn vào cuối một binary glibc, sửa header
+> bằng `dd`, rồi chạy — binary khởi động bình thường qua loader mới. Vì vậy không cần `patchelf`.
+
+### 1.2. Lỗi kinh điển: `LD_PRELOAD` của bionic
 
 Termux preload `libtermux-exec.so` (một thư viện **bionic**) vào **mọi** tiến trình con. Nếu
 binary glibc được exec với biến này còn nguyên, bionic lib sẽ bị nạp vào tiến trình glibc →
@@ -87,12 +112,12 @@ khỏi môi trường lệnh (`OpenCodeBootstrap.java:579-580`).
 │        └─► OpenCodeBootstrap.setupIfNeeded(context, callback)            │
 │                │                                                         │
 │                ├─► Installer (thread "opencode-setup")                   │
-│                │     1. apt-get  → glibc-repo, glibc-runner, patchelf, tar│
+│                │     1. apt-get  → glibc-repo, glibc-runner, tar         │
 │                │     2. HTTP GET → tarball opencode (tiến trình %)        │
 │                │     3. tar -xzf → ~/.opencode/tmp/package/bin/opencode  │
-│                │     4. patchelf --set-interpreter → staged file          │
+│                │     4. patch native (PT_INTERP) → staged file           │
 │                │     5. verify (--version) → rename atomic → symlink     │
-│                │     6. ghi $PREFIX/bin/{opencode,oc-install}             │
+│                │     6. ghi $PREFIX/bin/{opencode,oc-install,oc-patch}   │
 │                │                                                         │
 │                └─► Notification (tiến trình / lỗi) + ProgressDialog      │
 └──────────────────────────────────────────────────────────────────────────┘
@@ -125,6 +150,7 @@ khỏi môi trường lệnh (`OpenCodeBootstrap.java:579-580`).
 | `GLIBC_LIB_DIR` | `$PREFIX/glibc/lib` | Nơi loader glibc nằm. |
 | `OPENCODE_BIN_PATH` | `$PREFIX/bin/opencode` | Launcher (script `sh`). |
 | `OC_INSTALL_PATH` | `$PREFIX/bin/oc-install` | Launcher cập nhật. |
+| `OC_PATCH_PATH` | `$PREFIX/bin/oc-patch` | Bản CLI của patcher native, launcher dùng để tự vá lại. |
 | `SECOND_STAGE_SCRIPT_PATH` | `$PREFIX/etc/termux/termux-bootstrap/second-stage/…sh` | Bước 2 của bootstrap Termux. |
 | `RESOLV_CONF_PATH` | `$PREFIX/etc/resolv.conf` | DNS (tạo nếu thiếu). |
 
@@ -133,6 +159,11 @@ khỏi môi trường lệnh (`OpenCodeBootstrap.java:579-580`).
 | File | Vai trò trong kỹ thuật này |
 | --- | --- |
 | `app/src/main/java/com/termux/app/OpenCodeBootstrap.java` | **Toàn bộ installer** (tải thư viện, tải opencode, vá, launcher, tự sửa, notification). |
+| `app/src/main/java/com/termux/app/ElfPatch.java` | Cầu JNI nạp `libocpatch`, gọi patcher native. |
+| `app/src/main/cpp/elfpatch.c` / `elfpatch.h` | Patcher `PT_INTERP` (thay `patchelf`): đọc/ghi interpreter của ELF64. |
+| `app/src/main/cpp/ocpatch_jni.c` | Lớp JNI của `ElfPatch` (`setInterpreter`, `getInterpreter`, `errorString`). |
+| `app/src/main/cpp/ocpatch_main.c` | CLI `oc-patch` (`set-interpreter`/`get-interpreter`), cài vào `$PREFIX/bin`. |
+| `app/src/main/cpp/Android.mk` | Khai báo `libocpatch.so` (JNI) và `libocpatch-exec.so` (CLI). |
 | `app/src/main/java/com/termux/app/OpenCodeWebActivity.java` | Màn hình chính: setup runtime nếu cần, mở web UI, nút mở terminal. |
 | `app/src/main/java/com/termux/app/TermuxActivity.java` | Màn terminal phụ: nối installer vào vòng đời session, `checkRuntime`, intent `FORCE_UPDATE`. |
 | `app/src/main/java/com/termux/app/terminal/TermuxTerminalSessionActivityClient.java` | `startOpenCode()` — ghi `opencode\r` vào pty của session. |
@@ -155,7 +186,7 @@ private static boolean isTermuxBootstrapReady() {
 
 - Cổng này áp dụng cho **mọi** đường vào: `setupIfNeeded()` (dòng 222), `requestUpdate()` (dòng 347),
   `checkRuntime()` (dòng 1462).
-- Lý do: `apt-get`, `tar`, `patchelf` và cả `$PREFIX/bin/*` đều do bootstrap cung cấp. Chạy sớm sẽ
+- Lý do: `apt-get`, `tar` và cả `$PREFIX/bin/*` đều do bootstrap cung cấp. Chạy sớm sẽ
   ghi đè hoặc xung đột với chính trình cài bootstrap (race ⇒ `$PREFIX` hỏng ⇒ mất cả Termux).
 
 ### 3.1. Hai việc vệ sinh trước khi cài
@@ -217,13 +248,14 @@ $PREFIx/bin/apt-get \
 aptUpdate(false)                      // làm mới package list
 aptInstall(["glibc-repo"])             // thêm repo glibc chính thức + khóa ký
 aptUpdate(true)                       // làm mới list của repo glibc
-aptInstall(["glibc-runner","patchelf","tar"])
+aptInstall(["glibc-runner","tar","termux-am","ripgrep"])
 ```
 
 - `glibc-repo` là gói "siêu dữ liệu": nó thêm `deb https://packages-cf.termux.dev/apt/termux-glibc glibc stable`
   và khóa ký của repo vào `sources.list.d/`. Chỉ sau khi nó được cài, `apt update` mới "thấy" repo glibc.
 - `glibc-runner` mang loader `ld-linux-*.so.*` + bộ `*-glibc` toolchain vào `$PREFIX/glibc`.
-- `patchelf` = công cụ vá ELF; `tar` = giải nén `.tgz`.
+- `tar` = giải nén `.tgz`; `termux-am` = launcher `oc-install` gọi intent; `ripgrep` = tiện ích cho agent.
+- **Không còn `patchelf`**: việc vá ELF do thư viện native đi kèm APK làm (xem §1.1 và §8).
 
 ### 4.4. Mirror dự phòng (không phụ thuộc `pkg`)
 
@@ -262,26 +294,24 @@ apt(["-f","install","-y"], APT_INSTALL_TIMEOUT_MS);       // 3) sửa dependency
 return apt(args, APT_INSTALL_TIMEOUT_MS);                 // 4) thử lại
 ```
 
-### 4.6. Bắt buộc xác minh `patchelf` **thực sự chạy được**
+### 4.6. Cài patcher native vào `$PREFIX/bin/oc-patch`
+
+Patcher là một thư viện native **nằm sẵn trong APK** (`libocpatch-exec.so`), không cần `apt` và
+không thể "hỏng" vì thiếu `libc++`:
 
 ```java
-// OpenCodeBootstrap.java:752
-boolean patchelfWorks() {
-    return run([PREFIX + "/bin/patchelf", "--version"], VERIFY_TIMEOUT_MS).exitCode == 0;
-}
+// OpenCodeBootstrap.java: installOcPatch()
+File source = new File(nativeLibraryDir, "libocpatch-exec.so");
+copyFile(source, new File(PREFIX + "/bin/oc-patch"));
+Os.chmod(PREFIX + "/bin/oc-patch", 0755);
 ```
 
-`patchelf` link với `libc++_shared.so` và RUNPATH trỏ `$PREFIX/lib`. Nếu `libc++` ở đó cũ hơn bản
-`patchelf` được build ⇒ **`cannot locate symbol __hash_memory`** ⇒ lệnh chết ngay. Vì vậy:
+- Việc copy là idempotent: nếu đích đã tồn tại, thực thi được và cùng kích thước thì bỏ qua.
+- JNI `libocpatch.so` được `System.loadLibrary("ocpatch")` nạp; nếu nạp thất bại (ví dụ APK hỏng)
+  installer **fail ngay** với thông báo *"The native ELF patcher could not be loaded"* — trước khi
+  tải 250 MB.
 
-1. `patchelf --version` phải exit 0 mới được phép tải ~90 MB.
-2. Nếu fail → `aptInstall(["patchelf","libc++"])`, thử lại.
-3. Vẫn fail → `aptReinstall(["patchelf","libc++"])` (dùng `--reinstall` để ép cài lại dù apt nói
-   "đã up-to-date"), thử lại.
-4. Vẫn fail → **fail cả install**, kèm output cuối của lệnh trong thông báo lỗi.
-
-> Bước này phải nằm **trước** bước tải lớn: nếu không, app tải xong 90 MB rồi mới biết `patchelf`
-> hỏng.
+> Nhờ vậy bước "công cụ vá có chạy được không" biến mất: không có gói ngoài nào để hỏng.
 
 ### 4.7. Tìm loader glibc
 
@@ -400,8 +430,8 @@ run([PREFIX + "/bin/tar", "-xzf", tarball, "-C", tmpDir, "package/bin/opencode"]
         │  rename() (ưu tiên, cùng filesystem) hoặc copy() (fallback)
         ▼
 ~/.opencode/installed/.opencode-v<ver>.new     (file tạm để vá)
-        │  patchelf --set-interpreter $PREFIX/glibc/lib/ld-linux-*.so.*
-        │  chmod 0755        (patchelf có thể làm mất bit thực thi)
+        │  elf_set_interpreter() → PT_INTERP = $PREFIX/glibc/lib/ld-linux-*.so.*
+        │  chmod 0755        (bảo đảm bit thực thi)
         │  ./file --version   (KIỂM CHỨNG: phải chạy được và in ra số phiên bản)
         ▼
 ~/.opencode/installed/opencode-v<ver>          (rename atomic)
@@ -431,32 +461,36 @@ else { status("WARNING: the downloaded build does not run ..., keeping the insta
 
 `looksLikeAVersion` dùng regex `(?s).*\\d+\\.\\d+.*` ⇒ in ra số phiên bản là bằng chứng nhịp đập.
 
-### 8.2. Retry khi `patchelf` lỗi
+### 8.2. Vá bằng JNI, không cần retry
 
 ```java
-// OpenCodeBootstrap.java:862-871
-CmdResult patchelf = patchInterpreter(staged, loader);
-if (patchelf.exitCode != 0) {
-    status("patchelf --set-interpreter failed; reinstalling patchelf + libc++ and retrying");
-    aptReinstall(["patchelf","libc++"]);
-    patchelf = patchInterpreter(staged, loader);
-}
-if (patchelf.exitCode != 0) → fail
+// OpenCodeBootstrap.java: patchInterpreter()
+int code = ElfPatch.setInterpreter(file.getAbsolutePath(), loader);
+if (code != ElfPatch.OK) → fail (kèm ElfPatch.describe(code))
 ```
 
-Timeout của bước vá là **300 s** (`:155`) vì `patchelf` ghi lại file ~200 MB.
+Vì patcher native chỉ sửa header (vài byte), không có gói ngoài nào để hỏng và **không cần cơ chế
+retry** như bản `patchelf` cũ. Không còn timeout 300 s: thao tác gần như tức thời bất kể binary lớn
+cỡ nào.
 
 ### 8.3. Marker `.patched` — vì sao chỉ ghi khi thật sự đã vá
 
 ```java
-// OpenCodeBootstrap.java:921-928
-if (isPatchedTo(target, loader))   // patchelf --print-interpreter == loader
-    writeTextFile(new File(PATCHED_MARKER_PATH), binaryStamp(target));
-else { status("... not patched ...; patching it"); repairBinary(target, loader); }
+// OpenCodeBootstrap.java: installBinary()
+CmdResult verify = run([staged, "--version"], VERIFY_TIMEOUT_MS);   // staged đã vá
+if (looksLikeAVersion(verify)) { rename → target; ensurePtyHelper(); }
 ```
 
-`isPatchedTo` dùng `patchelf --print-interpreter` (đọc header, rẻ) để **xác nhận** thay vì tin vào
-niềm tin. Vân tay lưu là:
+Marker `.patched` được ghi bởi `repairInterpreterIfNeeded()` sau khi bản vá lại chạy được:
+
+```java
+// OpenCodeBootstrap.java:1633-1673
+if (binaryStamp(binary).equals(readTrimmed(new File(PATCHED_MARKER_PATH)))) return; // đã vá
+... vá trên bản sao → chạy --version → rename atomic ...
+writeTextFileQuietly(new File(PATCHED_MARKER_PATH), binaryStamp(binary));
+```
+
+Vân tay lưu là:
 
 ```java
 binaryStamp(file) = file.length() + " " + (file.lastModified() / 1000L);   // "<size> <mtime>"
@@ -465,7 +499,8 @@ binaryStamp(file) = file.length() + " " + (file.lastModified() / 1000L);   // "<
 Launcher dùng cùng định dạng: `stat -L -c '%s %Y'`.
 
 > Nếu ghi marker khi **chưa** vá, launcher sẽ `exec` binary chưa vá ⇒ `not found`/crash. Đó là lý do
-> marker chỉ được ghi sau khi `PT_INTERP` thật sự trỏ đúng loader.
+> marker chỉ được ghi sau khi binary đã vá **và** `--version` chạy được. (JNI `ElfPatch.getInterpreter`
+> và CLI `oc-patch get-interpreter` cho phép đọc lại `PT_INTERP` để kiểm tra thủ công.)
 
 ---
 
@@ -479,7 +514,7 @@ Nội dung (rút gọn từ `buildOpenCodeLauncher()`, dòng 1368):
 
 ```sh
 #!/data/data/com.termux/files/usr/bin/sh
-# Managed by the OpenCode for Termux app. opencode-launcher-version: 2
+# Managed by the OpenCode for Termux app. opencode-launcher-version: 5
 P="${PREFIX:-/data/data/com.termux/files/usr}"
 H="${HOME:-/data/data/com.termux/files/home}"
 PATH="$P/bin:$PATH"; export PATH
@@ -505,9 +540,9 @@ NOW=$(stat -L -c '%s %Y' "$BIN" 2>/dev/null)
 if [ -z "$MARK" ] || [ "$MARK" != "$NOW" ]; then
   # Binary đã đổi sau lần vá cuối → vá lại trên BẢN SAO, kiểm tra nó chạy, rồi mới mv
   REAL=$(readlink -f "$BIN" 2>/dev/null || echo "$BIN"); TMP="$REAL.repair.$$"
-  if [ -x "$P/bin/patchelf" ] && "$P/bin/patchelf" --version >/dev/null 2>&1 \
+  if [ -x "$P/bin/oc-patch" ] \
      && cp "$REAL" "$TMP" 2>/dev/null \
-     && "$P/bin/patchelf" --set-interpreter "$LOADER" "$TMP" >/dev/null 2>&1 \
+     && "$P/bin/oc-patch" set-interpreter "$LOADER" "$TMP" >/dev/null 2>&1 \
      && chmod 755 "$TMP" 2>/dev/null \
      && "$TMP" --version >/dev/null 2>&1 \
      && mv "$TMP" "$REAL" 2>/dev/null; then
@@ -530,7 +565,7 @@ Các quyết định thiết kế đáng chú ý:
 | `unset LD_PRELOAD` | Không nạp `libtermux-exec.so` (bionic) vào tiến trình glibc. |
 | `OPENCODE_DISABLE_AUTOUPDATE=1` | Updater của OpenCode sẽ thay binary bằng bản chưa vá ⇒ app không còn vá lại được. |
 | Marker `.patched` khớp ⇒ `exec` thẳng | Đường nóng: không có loader ở giữa, khởi động nhanh nhất. |
-| Marker lệch ⇒ **vá trên bản sao** | Không phá binary đang hoạt động nếu `patchelf` hỏng. |
+| Marker lệch ⇒ **vá trên bản sao** | Không phá binary đang hoạt động nếu `oc-patch` hỏng. |
 | Fallback `exec "$LOADER" --library-path ...` | Luôn có đường chạy được kể cả khi không vá được (chậm hơn nhưng sống). |
 | `upgrade` \| `update` → `oc-install` | Khiến lệnh update của chính OpenCode đi qua app để vá lại. |
 
@@ -538,7 +573,7 @@ Các quyết định thiết kế đáng chú ý:
 
 ```sh
 #!/data/data/com.termux/files/usr/bin/sh
-# Managed by the OpenCode for Termux app. opencode-launcher-version: 2
+# Managed by the OpenCode for Termux app. opencode-launcher-version: 5
 P="${PREFIX:-/data/data/com.termux/files/usr}"; AM="$P/bin/am"
 [ -x "$AM" ] || { echo "oc-install: the 'am' command is missing (termux-am package). ..." >&2; exit 127; }
 echo "oc-install: asking the OpenCode app to install/update the runtime (watch the notification)"
@@ -554,7 +589,7 @@ exec "$AM" start -a android.intent.action.VIEW \
 ```java
 // OpenCodeBootstrap.java:118
 private static final String LAUNCHER_MARKER =
-    "Managed by the OpenCode for Termux app. opencode-launcher-version: 2";
+    "Managed by the OpenCode for Termux app. opencode-launcher-version: 5";
 ```
 
 `restoreLauncher()` chỉ ghi lại launcher nếu file hiện tại **không** chứa marker ⇒ launcher do
@@ -592,7 +627,7 @@ private static List<String> runtimeProblems() {
     problems.add(OC_INSTALL_PATH)     nếu thiếu  ($PREFIX/bin/oc-install)
     problems.add(LINK_PATH)           nếu thiếu  ($HOME/.opencode/bin/opencode)
     problems.add(GLIBC_LIB_DIR + "/ld-linux-*.so.*") nếu không tìm thấy loader
-    problems.add(PREFIX + "/bin/patchelf") nếu không executable
+    problems.add(PREFIX + "/bin/oc-patch") nếu không executable
     problems.add(PREFIX + "/bin/tar")      nếu không executable
 }
 ```
@@ -700,8 +735,7 @@ processEnv.clear(); processEnv.putAll(env);     // env sạch, không kế thừ
 | `APT_UPDATE_TIMEOUT_MS` | 240 s | `apt-get update`. |
 | `APT_INSTALL_TIMEOUT_MS` | 900 s | `apt-get install` (gói glibc khá lớn). |
 | `SECOND_STAGE_TIMEOUT_MS` | 240 s | Script second-stage của Termux. |
-| `VERIFY_TIMEOUT_MS` | 90 s | `patchelf --version`, `--print-interpreter`, `opencode --version`. |
-| `PATCH_TIMEOUT_MS` | 300 s | `patchelf --set-interpreter` trên file ~200 MB. |
+| `VERIFY_TIMEOUT_MS` | 90 s | `oc-patch --version`, `opencode --version`. |
 | (cứng) | 180 s | `tar -xzf`. |
 
 ### 11.2. Bộ nhớ đệm & giới hạn log
@@ -725,12 +759,12 @@ processEnv.clear(); processEnv.putAll(env);     // env sạch, không kế thừ
 | Bản chữa | `aptUpdate(false)` (`:661`) | `apt-get update -y` |
 | Repo glibc | `aptInstall(["glibc-repo"])` (`:466`) | `apt-get install -y glibc-repo` |
 | Refresh glibc | `aptUpdate(true)` (`:470`) | `apt-get update -y` |
-| Thư viện | `aptInstall(["glibc-runner","patchelf","tar"])` (`:476`) | `apt-get install -y glibc-runner patchelf tar` |
-| Bản vá | `patchelfWorks()` (`:752`) | `patchelf --version` |
+| Thư viện | `aptInstall(["glibc-runner","tar","termux-am","ripgrep"])` | `apt-get install -y glibc-runner tar termux-am ripgrep` |
+| Patcher | `installOcPatch()` + `ElfPatch.isAvailable()` | giải nén `libocpatch-exec.so` từ APK → `$PREFIX/bin/oc-patch` |
 | Phiên bản | `fetchLatestVersion()` (`:1014`) | `curl -s https://opencode.ai/update/api/latest/cli/npm \| grep -o '"version":"[^"]*"'` |
 | Tải | `downloadTarball()` (`:1031`) | `curl -L -o oc.tgz https://registry.npmjs.org/@opencode/cli-linux-arm64/-/cli-linux-arm64-<ver>.tgz` |
 | Giải nén | `installBinary()` (`:840`) | `tar -xzf oc.tgz -C tmp package/bin/opencode` |
-| Vá | `patchInterpreter()` (`:759`) | `patchelf --set-interpreter $PREFIX/glibc/lib/ld-linux-aarch64.so.1 tmp/package/bin/opencode` |
+| Vá | `patchInterpreter()` → `ElfPatch.setInterpreter()` | `oc-patch set-interpreter $PREFIX/glibc/lib/ld-linux-aarch64.so.1 tmp/package/bin/opencode` |
 | Xác minh | `verifyBinary()` (`:775`) | `tmp/package/bin/opencode --version` |
 | Cài | `rename` + `.native-ready` | `mv tmp/package/bin/opencode ~/.opencode/installed/opencode-v<ver>` |
 | Symlink | `Os.symlink()` (`:915`) | `ln -sf ~/.opencode/installed/opencode-v<ver> ~/.opencode/bin/opencode` |
@@ -746,10 +780,10 @@ processEnv.clear(); processEnv.putAll(env);     // env sạch, không kế thừ
 | --- | --- | --- |
 | `opencode: not installed yet.` (exit 127) | Chưa có runtime | Mở app hoặc chạy `oc-install`. |
 | `opencode: the glibc runtime is missing.` (exit 127) | `glibc-runner` bị gỡ | `oc-install` (installer sẽ cài lại `glibc-runner`). |
-| `opencode: this build is not patched yet; running it through the glibc loader` | `.patched` lệch & `patchelf` hỏng/thiếu | `oc-install` để app vá lại; tạm thời vẫn chạy được qua loader. |
-| `Segmentation fault` ngay khi start (exit 139) | Binary bị vá sai bằng `--set-rpath` (bản cũ) | `oc-install` (bản hiện tại chỉ vá `--set-interpreter`). |
+| `opencode: this build is not patched yet; running it through the glibc loader` | `.patched` lệch & `oc-patch` hỏng/thiếu | `oc-install` để app vá lại; tạm thời vẫn chạy được qua loader. |
+| `Segmentation fault` ngay khi start (exit 139) | Binary bị vá sai bằng `--set-rpath` (bản cũ) | `oc-install` (bản hiện tại chỉ sửa `PT_INTERP`). |
 | `invalid ELF header` / crash ngay | `LD_PRELOAD` (bionic) còn trong env | Luôn chạy qua `$PREFIX/bin/opencode`; trong Java đã `unset`. |
-| `cannot locate symbol __hash_memory` | `patchelf` build với libc++ mới hơn `libc++` trong `$PREFIX/lib` | `apt-get install --reinstall -y patchelf libc++` (installer tự làm). |
+| `cannot locate symbol __hash_memory` | Bản cũ dùng `patchelf` build với libc++ mới hơn `libc++` trong `$PREFIX/lib` | Cập nhật app — patcher native không phụ thuộc `libc++`. |
 | `dpkg was interrupted` | Install bị kill giữa chừng | `dpkg --configure -a && apt-get -f install -y` (installer tự làm). |
 | `None of the mirrors are accessible` | `pkg` dò mirror thất bại | Dùng `apt-get` trực tiếp (installer không gọi `pkg`). |
 | `Failed to determine the OpenCode version` | API + npm registry không trả lời | Kiểm tra mạng/VPN, thử lại. |
@@ -823,8 +857,10 @@ PREFIX=/data/data/com.termux/files/usr
 apt-get update -y
 apt-get install -y glibc-repo
 apt-get update -y
-apt-get install -y glibc-runner patchelf tar
-patchelf --version >/dev/null          # bắt lỗi libc++ sớm
+apt-get install -y glibc-runner tar
+
+# Patcher native: build từ app/src/main/cpp/elfpatch.c + ocpatch_main.c thành `oc-patch`
+# (trong app, bản CLI này được cài sẵn ở $PREFIX/bin/oc-patch).
 
 # 2. Phiên bản
 VER=$(curl -fsSL https://opencode.ai/update/api/latest/cli/npm | grep -o '"version":"[^"]*"' | head -1 | cut -d'"' -f4)
@@ -837,7 +873,7 @@ tar -xzf oc.tgz package/bin/opencode
 
 # 4. Vá (CHỈ interpreter)
 LOADER=$(ls $PREFIX/glibc/lib/ld-linux*.so.* | head -1)
-patchelf --set-interpreter "$LOADER" package/bin/opencode
+oc-patch set-interpreter "$LOADER" package/bin/opencode
 chmod 755 package/bin/opencode
 ./package/bin/opencode --version          # phải in ra số phiên bản
 
@@ -862,7 +898,7 @@ dùng lại trong một công cụ khác (script CI, máy chủ, container), ch�
 
 ```
 OpenCodeBootstrap
-├── phần thuần (không phụ thuộc Android):  apt wrapper, HTTP, tar, patchelf, launcher
+├── phần thuần (không phụ thuộc Android):  apt wrapper, HTTP, tar, elfpatch, launcher
 └── phần phụ thuộc Android:  Activity, ProgressDialog, NotificationManager, Os.symlink/chmod
 ```
 
@@ -883,7 +919,7 @@ Nguyên tắc giữ nguyên khi tách:
 2. **Không chạm cấu hình người dùng** (mirror dự phòng qua `sources.list` tạm).
 3. **Verify trước khi cài** (`--version` phải in ra số phiên bản).
 4. **Vá trên bản sao, cài bằng rename atomic**.
-5. **Marker `.patched` chỉ ghi sau khi xác nhận `PT_INTERP` đúng** (`patchelf --print-interpreter`).
+5. **Marker `.patched` chỉ ghi sau khi xác nhận `PT_INTERP` đúng** (`ElfPatch.getInterpreter`).
 6. **Ghi launcher có `unset LD_PRELOAD`** và fallback qua loader.
 7. **Idempotent**: chạy lại không tải lại, không phá trạng thái tốt.
 
@@ -907,32 +943,32 @@ Nguyên tắc giữ nguyên khi tách:
 
 | Lệnh | Vị trí | Vai trò |
 | --- | --- | --- |
-| `apt-get` | `$PREFIX/bin/apt-get` | Cài `glibc-repo`, `glibc-runner`, `patchelf`, `tar`; `dpkg --configure -a` khi cần sửa DB. |
+| `apt-get` | `$PREFIX/bin/apt-get` | Cài `glibc-repo`, `glibc-runner`, `tar`, `termux-am`, `ripgrep`; `dpkg --configure -a` khi cần sửa DB. |
 | `dpkg` | `$PREFIX/bin/dpkg` | Sửa database package bị giết dở. |
 | `tar` | `$PREFIX/bin/tar` | Giải nén `package/bin/opencode`. |
-| `patchelf` | `$PREFIX/bin/patchelf` | Vá `PT_INTERP`, đọc `PT_INTERP`, kiểm tra phiên bản. |
+| `oc-patch` | `$PREFIX/bin/oc-patch` (từ `libocpatch-exec.so` trong APK) | Vá `PT_INTERP`, đọc `PT_INTERP`. Không phải gói apt. |
 | `bash` | `$PREFIX/bin/bash` | Chạy second-stage của bootstrap Termux. |
 | `am` | `$PREFIX/bin/am` | `oc-install` mở app bằng intent `FORCE_UPDATE`. |
 
 ### 18.3. Checklist QA
 
 - [ ] `opencode --version` in ra số phiên bản **từ launcher** (`$PREFIX/bin/opencode`), không phải từ `~/.opencode/bin/opencode`.
-- [ ] `patchelf --print-interpreter ~/.opencode/installed/opencode-v<ver>` trỏ đúng `$PREFIX/glibc/lib/ld-linux-*.so.*`.
+- [ ] `oc-patch get-interpreter ~/.opencode/installed/opencode-v<ver>` trỏ đúng `$PREFIX/glibc/lib/ld-linux-*.so.*`.
 - [ ] `~/.opencode/.patched` khớp `stat -L -c '%s %Y' ~/.opencode/bin/opencode`.
 - [ ] `~/.opencode/.native-ready` chứa đúng version đang chạy.
 - [ ] `~/.opencode/installed/` không còn file `.opencode-*.new` (tạm).
 - [ ] `$HOME/.opencode/setup.sh` **không** tồn tại (đã gỡ installer script cũ).
 - [ ] `~/.opencode/apt/` không còn sót (`sources.list` tạm đã dọn).
 - [ ] Kill app giữa lúc tải ⇒ mở lại ⇒ installer tiếp tục, không tải lại từ đầu nếu binary đã verify.
-- [ ] Xoá `$PREFIX/bin/patchelf` ⇒ mở app ⇒ app báo thiếu và cài lại.
+- [ ] Xoá `$PREFIX/bin/oc-patch` ⇒ mở app ⇒ app cài lại nó từ APK (không cần mạng).
 - [ ] `opencode upgrade` ⇒ đi qua `oc-install` ⇒ app vá lại binary mới (marker cập nhật).
 - [ ] `env | grep LD_PRELOAD` trong session Termux vẫn có ⇒ nhưng tiến trình `opencode` **không** được preload ⇒ vẫn chạy.
 - [ ] `~/.opencode/diagnostics.txt` có `abi:`, `sdk:`, `sources.list` ⇒ dùng khi gửi issue.
 
 ### 18.4. Tóm tắt một câu
 
-> Tải thư viện bằng `apt-get` (glibc-runner + patchelf + tar) → tải tarball OpenCode từ npm →
-> **chỉ vá `PT_INTERP`** bằng `patchelf --set-interpreter` trỏ tới loader glibc của Termux →
+> Tải thư viện bằng `apt-get` (glibc-runner + tar) → tải tarball OpenCode từ npm →
+> **chỉ vá `PT_INTERP`** bằng patcher native (`oc-patch`/`elfpatch.c`) trỏ tới loader glibc của Termux →
 > verify bằng `--version` → cài bằng `rename` atomic → khởi chạy qua launcher có `unset LD_PRELOAD`
 > và cơ chế tự vá lại theo marker `.patched` — tất cả trong **một class Java duy nhất**
 > (`OpenCodeBootstrap.java`), không root, không proot, không chroot.

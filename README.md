@@ -12,7 +12,7 @@ files in `$HOME`, `pkg`, `git`, `python`, … everything Termux can do, the agen
 The application is a fork of the official [Termux app](https://github.com/termux/termux-app) with
 one addition: a bootstrapper that
 
-1. installs the Termux **glibc runtime** (`glibc-runner`) and `patchelf`,
+1. installs the Termux **glibc runtime** (`glibc-runner`),
 2. downloads the **official** OpenCode CLI from npm,
 3. patches the ELF so that it runs on Android (`PT_INTERP` → Termux' glibc loader),
 4. verifies the binary and installs it atomically,
@@ -45,10 +45,10 @@ Termux has an official glibc runtime (`glibc-repo` / `glibc-runner`) that instal
 entry to be pointed to that loader:
 
 ```
-apt-get install glibc-repo glibc-runner patchelf tar
+apt-get install glibc-repo glibc-runner tar
   → GET https://registry.npmjs.org/@opencode/cli-linux-<arch>/-/<pkg>-<ver>.tgz
   → tar -xzf package/bin/opencode
-  → patchelf --set-interpreter $PREFIX/glibc/lib/ld-linux-*.so.*
+  → point PT_INTERP at $PREFIX/glibc/lib/ld-linux-*.so.*   (native patcher in the app)
   → ./opencode --version            # must print the version
   → mv (atomic)  →  $HOME/.opencode/installed/opencode-v<ver>
   → ln -s         →  $HOME/.opencode/bin/opencode
@@ -60,9 +60,12 @@ Everything above happens inside **one Java class**
 installation keeps its progress, survives the app being killed in the middle of the download and
 repairs itself afterwards.
 
-> **Do not use `patchelf --set-rpath`.** It rewrites the dynamic section of the ~200 MB binary and
-> makes it crash with `SIGSEGV` (exit code 139) even though the command reports success. Only the
-> interpreter is patched — the glibc loader finds `libc.so.6` next to itself.
+> **The interpreter is patched by the app itself.** The native patcher
+> ([`elfpatch.c`](app/src/main/cpp/elfpatch.c)) only rewrites the `PT_INTERP` program header of the
+> binary, so it does not depend on the external `patchelf` tool (and its fragile `libc++` symbol)
+> anymore. When the new path fits into the old slot it is overwritten in place, otherwise it is
+> appended to the end of the file — the kernel reads the interpreter straight from the file, so it
+> does not have to live inside a loadable segment.
 
 The full technical description, including the error matrix and the security trade-offs, is in
 [`docs/OPENCODE_INSTALL_TECHNIQUE.md`](docs/OPENCODE_INSTALL_TECHNIQUE.md).
@@ -114,7 +117,7 @@ build it yourself (see [Building from source](#building-from-source)).
 On the first start the app:
 
 1. extracts the Termux bootstrap,
-2. installs `glibc-runner`, `patchelf` and `tar` with `apt`,
+2. installs `glibc-runner` and `tar` with `apt`,
 3. downloads the OpenCode CLI (~100 MB),
 4. patches, verifies and installs it,
 5. starts the OpenCode service and opens the web UI. The terminal/OpenTUI is available from the
@@ -230,7 +233,7 @@ The app installs two commands into `$PREFIX/bin`:
 
 - **`opencode`** — starts the TUI. It unsets `LD_PRELOAD` (the bionic preload of Termux must
   never be loaded into a glibc process), sets `OPENCODE_DISABLE_AUTOUPDATE=1` and re-patches the
-  binary if the marker `.patched` does not match the installed file.
+  binary with the `oc-patch` helper if the marker `.patched` does not match the installed file.
 - **`oc-install`** — asks the app to install or update the runtime (it opens the app with the
   `com.termux.opencode.FORCE_UPDATE` intent). `opencode upgrade` is redirected to it, because only
   the app knows how to patch the binary again.
@@ -250,6 +253,7 @@ The app installs two commands into `$PREFIX/bin`:
 | `~/.opencode/diagnostics.txt` | Snapshot of the environment |
 | `$PREFIX/bin/opencode` | Launcher script |
 | `$PREFIX/bin/oc-install` | Installer/update launcher script |
+| `$PREFIX/bin/oc-patch` | Native ELF patcher used by the launcher |
 | `$PREFIX/glibc/lib/ld-linux-*.so.*` | The glibc loader used by the binary |
 
 ---
@@ -261,8 +265,8 @@ The app installs two commands into `$PREFIX/bin`:
 | `opencode: not installed yet.` | The runtime is not installed | Open the app or run `oc-install` |
 | `opencode: the glibc runtime is missing.` | `glibc-runner` was removed | Run `oc-install` |
 | `invalid ELF header` / crash on start | `LD_PRELOAD` of Termux reached the glibc process | Always use `$PREFIX/bin/opencode`, never the binary in `~/.opencode/bin` directly |
-| `Segmentation fault` (exit 139) | The binary was patched with `--set-rpath` | Run `oc-install`, the app only patches the interpreter |
-| `cannot locate symbol __hash_memory` | `patchelf` is newer than `libc++` | The app reinstalls `patchelf` and `libc++` automatically |
+| `Segmentation fault` (exit 139) | The binary was patched with `--set-rpath` by an old build | Run `oc-install`, the app only patches the interpreter |
+| `cannot locate symbol __hash_memory` | An old build used `patchelf`, which is newer than `libc++` | Update the app — the native patcher has no `libc++` dependency |
 | `dpkg was interrupted` | The app was killed during an install | The app runs `dpkg --configure -a` automatically |
 | `None of the mirrors are accessible` | `pkg` could not reach any mirror | The app uses `apt-get` with its own list of mirrors |
 | The download stops at some % | Slow or unstable network | Wait — reopen the app, the download continues where it stopped |
@@ -307,7 +311,8 @@ See [`docs/BUILDING.md`](docs/BUILDING.md) for the details (signing, ABI splits,
   <https://github.com/termux/termux-app> — GPL-3.0 (see [`LICENSE.md`](LICENSE.md)).
 - **Termux packages** — the glibc runtime (`termux/glibc-packages`).
 - **OpenCode** — the agent itself, <https://opencode.ai> — MIT.
-- **patchelf** — <https://github.com/NixOS/patchelf> — GPL-2.0.
+- **ELF patcher** — written for this app (`app/src/main/cpp/elfpatch.c`), no third-party tool is
+  bundled anymore.
 
 The installation technique is documented in
 [`docs/OPENCODE_INSTALL_TECHNIQUE.md`](docs/OPENCODE_INSTALL_TECHNIQUE.md) and in
