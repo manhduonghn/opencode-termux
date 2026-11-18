@@ -70,7 +70,6 @@ import java.util.regex.Pattern;
  * The installation itself is not bound to an activity, it keeps running in the background and the
  * user is informed through a notification.</p>
  *
- * @see <a href="https://github.com/manhduonghn/opencode-install-technique">opencode-install-technique</a>
  */
 public final class OpenCodeBootstrap {
 

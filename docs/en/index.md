@@ -1,13 +1,15 @@
----
-page_ref: /docs/apps/termux/index.html
----
+# OpenCode for Termux — Documentation
 
-# Termux App Docs
+This repository contains **OpenCode for Termux**, an Android app based on Termux that installs and
+runs the official OpenCode CLI natively inside the Termux environment.
 
-<!--- DOC_HEADER_PLACEHOLDER -->
+## Contents
 
-Welcome to documentation for the [Termux App].
+- [Project overview and usage](../../README.md)
+- [Building from source](../BUILDING.md)
 
-##
+## Notes
 
-[Termux App]: https://github.com/termux/termux-app
+- Official OpenCode binaries are available for `arm64-v8a` and `x86_64` Android ABIs.
+- Runtime installation, launcher management, and self-healing behavior are implemented by the app
+  (see `app/src/main/java/com/termux/app/OpenCodeBootstrap.java`).
