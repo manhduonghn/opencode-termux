@@ -246,9 +246,40 @@ final class FileManagerDialog {
         manager.show();
     }
 
-    /** Close the dialog if it has not been dismissed already. */
+    /**
+     * Close the dialog if it has not been dismissed already.
+     *
+     * <p>{@link #activeDialog} is static, so it can still point at a manager created by an
+     * Activity that has since been recreated or destroyed. Such a dialog reports {@code true}
+     * from {@link Dialog#isShowing()} even though the hosting Activity's decor view has already
+     * been removed from the window manager. Calling {@link Dialog#dismiss()} on it then throws
+     * {@code IllegalArgumentException: View ... not attached to window manager}. Ignore that
+     * exception: the window is gone anyway, but the cleanup below must still run.</p>
+     */
     private void dismiss() {
-        if (dialog != null && dialog.isShowing()) dialog.dismiss();
+        Dialog current = dialog;
+        if (current == null) return;
+        // Clear the reference first so re-entrant calls and isAlive() cannot see a dead dialog.
+        dialog = null;
+        try {
+            if (current.isShowing()) current.dismiss();
+        } catch (IllegalArgumentException ignored) {
+            // The hosting Activity was already detached from the window manager.
+        } finally {
+            // Dialog.onDismiss() runs in Dialog.dismiss()'s finally block, but it is skipped
+            // entirely when the dialog's window is already destroyed, so make sure the shared
+            // state is reset here as well. The method is safe to call more than once.
+            onDismissed();
+        }
+    }
+
+    /** Release the resources owned by this manager when its dialog goes away. */
+    private void onDismissed() {
+        loadGeneration++;
+        searchGeneration++;
+        executor.shutdownNow();
+        FileManagerDialog current = activeDialog == null ? null : activeDialog.get();
+        if (current == this) activeDialog = null;
     }
 
     /** Reload the active manager, for example after storage access was granted. */
@@ -326,13 +357,7 @@ final class FileManagerDialog {
         dialog = new Dialog(activity, R.style.Theme_Opencode_FullScreenDialog);
         dialog.setContentView(view);
         dialog.setCanceledOnTouchOutside(false);
-        dialog.setOnDismissListener(d -> {
-            loadGeneration++;
-            searchGeneration++;
-            executor.shutdownNow();
-            FileManagerDialog current = activeDialog == null ? null : activeDialog.get();
-            if (current == this) activeDialog = null;
-        });
+        dialog.setOnDismissListener(d -> onDismissed());
         dialog.setOnKeyListener((d, keyCode, event) -> {
             if (keyCode != KeyEvent.KEYCODE_BACK || event.getAction() != KeyEvent.ACTION_UP) {
                 return false;
@@ -1182,7 +1207,7 @@ final class FileManagerDialog {
 
     private void openProject(Entry entry) {
         if (!entry.file.isDirectory()) return;
-        if (dialog != null) dialog.dismiss();
+        dismiss();
         listener.onOpenProject(entry.file);
     }
 
