@@ -29,7 +29,8 @@ integrated bootstrapper and UI tailored for OpenCode.
 ## How it works
 
 1. Ensures the Termux bootstrap and required packages/runtime are available (including the glibc
-   loader under `$PREFIX/glibc`).
+   loader under `$PREFIX/glibc`). Packages are installed with Termux's `pkg`, which reuses cached
+   package lists so a restart of the app skips redundant `apt update` calls.
 2. Resolves the OpenCode release to install and downloads the official
    `@opencode-ai/cli-linux-<arch>` npm tarball.
 3. Extracts the `opencode` binary, patches its ELF interpreter (`PT_INTERP`) to the Termux glibc

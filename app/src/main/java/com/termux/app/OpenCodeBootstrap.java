@@ -50,12 +50,18 @@ import java.util.regex.Pattern;
  * ships <b>bionic</b>. The binary therefore has to be patched before it can be executed:</p>
  *
  * <pre>
- *   apt-get install glibc-repo glibc-runner tar
+ *   pkg install glibc-repo glibc-runner tar
  *     -&gt; download the official npm tarball @opencode/cli-linux-&lt;arch&gt;
  *     -&gt; tar -xzf package/bin/opencode
  *     -&gt; point PT_INTERP at $PREFIX/glibc/lib/ld-linux-*.so.*   (interpreter ONLY)
  *     -&gt; verify with --version -&gt; atomic rename -&gt; $PREFIX/bin/opencode launcher
  * </pre>
+ *
+ * <p>Packages are installed through Termux's {@code pkg} front end. It reuses the cached apt
+ * lists (only refreshing them when they are missing or stale), which makes a warm start much
+ * faster than calling {@code apt-get update} on every run. Mirror selection is disabled via
+ * {@code TERMUX_PKG_NO_MIRROR_SELECT}, so {@code pkg} never probes mirrors or rewrites the
+ * sources of the user. {@code apt-get} is kept only as a fallback for broken configurations.</p>
  *
  * <p>The interpreter is rewritten by the native patcher that ships inside the app
  * ({@link ElfPatch}, {@code libocpatch}). It only touches the PT_INTERP program header, so the
@@ -135,12 +141,16 @@ public final class OpenCodeBootstrap {
     public static final String GLIBC_LIB_DIR = PREFIX + "/glibc/lib";
     /** Cache directory of apt, the downloaded packages are put there. */
     public static final String APT_ARCHIVES_DIR = PREFIX + "/var/cache/apt/archives";
+    /** Directory where apt stores the package lists of the configured repositories. */
+    public static final String APT_LISTS_DIR = PREFIX + "/var/lib/apt/lists";
     /** Launcher script, {@code opencode}. */
     public static final String OPENCODE_BIN_PATH = PREFIX + "/bin/opencode";
     /** Launcher script, {@code oc-install}. */
     public static final String OC_INSTALL_PATH = PREFIX + "/bin/oc-install";
     /** Native ELF patcher used by the launcher to repair the binary, {@code oc-patch}. */
     public static final String OC_PATCH_PATH = PREFIX + "/bin/oc-patch";
+    /** Termux package manager front end, preferred over raw {@code apt-get} for installs. */
+    public static final String PKG_PATH = PREFIX + "/bin/pkg";
     /** Installer script of older versions, removed on sight. */
     public static final String LEGACY_SETUP_SCRIPT_PATH = OC_HOME + "/setup.sh";
     /** Directory holding the second stage script of the Termux bootstrap. */
@@ -520,7 +530,8 @@ public final class OpenCodeBootstrap {
             env.put("LANG", "en_US.UTF-8");
             env.put("COLORTERM", "truecolor");
             env.put("DEBIAN_FRONTEND", "noninteractive");
-            // Do not let maintainer scripts change the mirror of the user.
+            // With this set, `pkg install` skips the 78-mirror scan of select_mirror() and
+            // never rewrites sources.list, so it is safe to use during the app startup.
             env.put("TERMUX_PKG_NO_MIRROR_SELECT", "1");
             // The bionic preload of Termux must never reach a glibc process.
             env.remove("LD_PRELOAD");
@@ -570,22 +581,26 @@ public final class OpenCodeBootstrap {
             ensureSecondStage();
             ensureResolvConf();
 
-            setStage(OpenCodeInstallState.STAGE_APT_UPDATE, "Refreshing the package lists...");
-            if (!aptUpdate(false))
-                throw new InstallException("Could not refresh the package lists from any mirror. Check the Wi-Fi/mobile connection and try again.");
-
+            // Termux's `pkg install` refreshes the apt lists only when they are missing or
+            // stale. Let it prepare the lists on its own: on a warm start this skips a whole
+            // `apt update` round trip and the runtime is ready much sooner.
             setStage(OpenCodeInstallState.STAGE_APT_INSTALL, "Installing the glibc repository...");
-            if (!aptInstall(Arrays.asList("glibc-repo")))
+            if (!installPackages(Arrays.asList("glibc-repo")))
                 throw new InstallException("Could not install the 'glibc-repo' package. Check the Wi-Fi/mobile connection and try again.");
 
-            setStage(OpenCodeInstallState.STAGE_APT_UPDATE, "Refreshing the package lists of the glibc repository...");
-            if (!aptUpdate(true))
-                throw new InstallException("Could not refresh the package lists of the glibc repository.");
+            // glibc-repo adds a new source under sources.list.d, which `pkg` does not watch.
+            // Refresh it only when the lists are not cached yet; on a warm start they are
+            // already there and another `apt update` would just waste time.
+            if (mTempSourcesOptions != null || !haveGlibcPackageLists()) {
+                setStage(OpenCodeInstallState.STAGE_APT_UPDATE, "Refreshing the package lists of the glibc repository...");
+                if (!aptUpdate(true))
+                    throw new InstallException("Could not refresh the package lists of the glibc repository.");
+            }
 
             // 'termux-am' is needed by the 'oc-install' launcher, it asks the app to install
             // or update the runtime.
             setStage(OpenCodeInstallState.STAGE_APT_INSTALL, "Installing the helper packages...");
-            if (!aptInstall(Arrays.asList("glibc-runner", "tar", "termux-am", "ripgrep")))
+            if (!installPackages(Arrays.asList("glibc-runner", "tar", "termux-am", "ripgrep")))
                 Logger.logWarn(LOG_TAG, "Some of the helper packages could not be installed, continuing anyway.");
 
             // The ELF patcher ships inside the APK, it does not need any apt package. Publish
@@ -645,7 +660,80 @@ public final class OpenCodeBootstrap {
             if (loader != null) ensurePtyHelper(loader);
         }
 
-        /* ------------------------------------------------------------------ apt */
+        /* ------------------------------------------------------------------ apt / pkg */
+
+        /**
+         * Install packages through Termux's {@code pkg} front end, with raw apt as a fallback.
+         *
+         * <p>{@code pkg install} reuses the cached apt lists and only refreshes them when they are
+         * missing or stale. Using it for the startup setup avoids a redundant full
+         * {@code apt update} round trip on a warm start. Mirror probing is disabled in the
+         * environment of the installer ({@code TERMUX_PKG_NO_MIRROR_SELECT=1}), so {@code pkg}
+         * never rewrites the sources of the user.</p>
+         *
+         * @return true when all packages are installed
+         */
+        private boolean installPackages(List<String> packages) {
+            // With temporary fallback sources `pkg` would re-check the broken sources.list
+            // before installing, so use apt directly once those options are in place.
+            if (mTempSourcesOptions == null && pkgInstall(packages))
+                return true;
+
+            // pkg could not prepare the cache (missing lists or a broken configuration).
+            // Refresh it ourselves, including the fallback mirrors, then install with apt.
+            if (mTempSourcesOptions == null && !aptUpdate(false))
+                return false;
+
+            return aptInstall(packages);
+        }
+
+        /**
+         * Run {@code pkg install -y} for the given packages. A transaction that fails because
+         * the app was killed during a previous install is retried after repairing dpkg.
+         */
+        private boolean pkgInstall(List<String> packages) {
+            if (!new File(PKG_PATH).isFile()) return false;
+            // Without a configured mirror `pkg` scans all known mirrors before failing.
+            // Skip it in that case so the fallback mirrors are used right away.
+            if (!hasConfiguredMirror()) return false;
+
+            List<String> cmd = new ArrayList<>();
+            cmd.add(PKG_PATH);
+            cmd.add("install");
+            cmd.add("-y");
+            if (mTempSourcesOptions != null)
+                cmd.addAll(mTempSourcesOptions); // pkg forwards options to apt install
+            cmd.addAll(packages);
+
+            if (run(cmd, APT_INSTALL_TIMEOUT_MS, true, new AptInstallListener()).exitCode == 0)
+                return true;
+
+            status("Repairing the package database...");
+            run(Arrays.asList(PREFIX + "/bin/dpkg", "--configure", "-a"), APT_INSTALL_TIMEOUT_MS, true, null);
+            return run(cmd, APT_INSTALL_TIMEOUT_MS, true, null).exitCode == 0;
+        }
+
+        /** @return true when the user has at least one repository configured in sources.list. */
+        private static boolean hasConfiguredMirror() {
+            String sources = readTextFileQuietly(new File(APT_SOURCES_LIST_PATH));
+            if (sources == null) return false;
+            for (String line : sources.split("\n")) {
+                if (line.trim().startsWith("deb ")) return true;
+            }
+            return false;
+        }
+
+        /** @return true when apt already has the package lists of the glibc repository. */
+        private static boolean haveGlibcPackageLists() {
+            File[] lists = new File(APT_LISTS_DIR).listFiles();
+            if (lists == null) return false;
+            for (File file : lists) {
+                String name = file.getName();
+                if (file.isFile() && name.contains("_dists_glibc_") && name.endsWith("_Packages"))
+                    return true;
+            }
+            return false;
+        }
 
         private boolean aptUpdate(boolean withGlibc) {
             if (apt(Arrays.asList("update"), APT_UPDATE_TIMEOUT_MS, true, new AptUpdateListener()))
@@ -685,11 +773,7 @@ public final class OpenCodeBootstrap {
                 if (isExecutable(new File(PREFIX + "/bin/rg"))) return false;
 
                 status("Installing ripgrep so that the glob and grep tools work...");
-                if (aptInstall(Arrays.asList("ripgrep"))) return true;
-
-                // The package lists of an old installation may be missing or stale.
-                aptUpdate(false);
-                if (aptInstall(Arrays.asList("ripgrep"))) return true;
+                if (installPackages(Arrays.asList("ripgrep"))) return true;
 
                 Logger.logWarn(LOG_TAG, "Could not install ripgrep, the glob and grep tools may fail.");
                 return false;
@@ -2098,8 +2182,8 @@ public final class OpenCodeBootstrap {
     }
 
     /**
-     * Guesses the progress of {@code apt-get install} from its output, used when the packages
-     * could not be downloaded by the app itself.
+     * Guesses the progress of an install ({@code pkg install} or {@code apt-get install}) from
+     * its output, used when the packages are not downloaded by the app itself.
      */
     private static final class AptInstallListener implements LineListener {
 
